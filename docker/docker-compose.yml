@@ -1,0 +1,19 @@
+name: translate_mBART_50
+
+services:
+  ros-humble-master: 
+    build:
+      context: ../
+      dockerfile: ./docker/Dockerfile
+    volumes:
+      - ../:/app/
+    env_file:
+      - ./.env
+    ports:
+      - "8000:8000" 
+    networks:
+      - robot_network
+
+networks:
+  robot_network:
+    driver: bridge
