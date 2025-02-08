@@ -3,6 +3,8 @@
 **Speech-to-Text API** is a microservice based on **FastAPI** and **Whisper (OpenAI)** that transcribes audio and video into text.  
 The service supports **99+ languages**, including **English, Russian, Chinese, Spanish, and many more**.
 
+  The project is under development! Some functionality is still in the process of being written, and changes in the API and operating logic are possible.
+
 ## 🚀 Features
 - 🎤 **Audio transcription** (WAV, MP3, FLAC, AAC, OGG, M4A, etc.)
 - 🎥 **Extract audio from video** (MP4, MKV, AVI)
