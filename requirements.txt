@@ -1,0 +1,19 @@
+# FastAPI и сервер Uvicorn
+fastapi==0.110.0
+uvicorn==0.27.1
+
+# Hugging Face Transformers и модель Whisper
+transformers==4.38.2
+torch==2.1.0
+torchaudio==2.1.0
+
+# Обработка аудио и видео (FFmpeg, SoundFile)
+ffmpeg-python==0.2.0
+soundfile==0.12.1
+
+# Логирование и обработка ошибок
+loguru==0.7.2
+
+# Тестирование API и моделей
+pytest==8.0.2
+httpx==0.27.0

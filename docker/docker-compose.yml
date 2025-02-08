@@ -1,7 +1,7 @@
-name: translate_mBART_50
+name: speech_to_text_service
 
 services:
-  ros-humble-master: 
+  speech-to-text-service:
     build:
       context: ../
       dockerfile: ./docker/Dockerfile
@@ -10,9 +10,10 @@ services:
     env_file:
       - ./.env
     ports:
-      - "8000:8000" 
+      - "8000:8000"
     networks:
       - robot_network
+    restart: unless-stopped
 
 networks:
   robot_network:

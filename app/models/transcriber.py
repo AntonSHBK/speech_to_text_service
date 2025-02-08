@@ -1,35 +1,15 @@
 import os
 import json
 from pathlib import Path
-import subprocess
-from abc import ABC, abstractmethod
 
 import torch
 import torchaudio
 import torchaudio.transforms as transforms
 from transformers import WhisperProcessor, WhisperForConditionalGeneration
 import soundfile as sf
+import ffmpeg
 
-
-class BaseModel(ABC):
-    """Базовый класс для моделей транскрипции."""
-    
-    def __init__(self, model_name: str, cache_dir: Path = ''):
-        self.model_name = model_name
-        self.device = "cuda" if torch.cuda.is_available() else "cpu"
-        self.model = None
-        self.processor = None
-        self.cache_dir = cache_dir
-
-    @abstractmethod
-    def load_model(self):
-        """Загрузить модель."""
-        pass
-
-    @abstractmethod
-    def transcribe_audio(self, audio_path: str) -> str:
-        """Транскрибировать аудиофайл."""
-        pass
+from app.models.base import BaseModel
 
 
 class WhisperTranscriber(BaseModel):
@@ -66,21 +46,28 @@ class WhisperTranscriber(BaseModel):
         """
         audio_path = Path(audio_path)
 
-        # Проверяем, является ли файл WAV
+        # Проверяем, является ли файл WAV, если нет - конвертируем
         if audio_path.suffix.lower() not in [".wav"]:
             print(f"⚠ Конвертируем {audio_path.suffix} в WAV...")
+
             temp_wav_path = audio_path.with_suffix(".wav")
 
-            # Используем FFmpeg для конвертации
-            subprocess.run([
-                "ffmpeg", "-i", str(audio_path), "-ar", str(target_sample_rate), 
-                "-ac", "1", "-y", str(temp_wav_path)
-            ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-
-            audio_path = temp_wav_path
+            try:
+                (
+                    ffmpeg
+                    .input(str(audio_path))
+                    .output(str(temp_wav_path), format="wav", ar=target_sample_rate, ac=1)
+                    .run(overwrite_output=True, quiet=True)
+                )
+                audio_path = temp_wav_path  # Обновляем путь на новый WAV
+            except Exception as e:
+                raise RuntimeError(f"Ошибка при конвертации {audio_path}: {e}")
 
         # Загружаем аудиофайл через torchaudio
-        audio, sample_rate = torchaudio.load(audio_path)
+        try:
+            audio, sample_rate = torchaudio.load(str(audio_path))
+        except Exception as e:
+            raise RuntimeError(f"Ошибка загрузки аудио: {e}")
 
         # Если частота не совпадает с 16 kHz, ресемплируем
         if sample_rate != target_sample_rate:
@@ -123,7 +110,6 @@ class WhisperTranscriber(BaseModel):
             audio = audio.mean(dim=0, keepdim=True)
 
         return audio.to(torch.float32)
-
 
     def transcribe_audio(
         self, 
