@@ -26,6 +26,6 @@ class ModelHandler:
 
 if __name__ == "__main__":
     model_handler = ModelHandler()
-    audio_file = "app/data/input/sample.wav"
+    audio_file = "./app/data/input/test.wav"
     transcript = model_handler.transcribe(audio_file)
     print("Результат:", transcript)
