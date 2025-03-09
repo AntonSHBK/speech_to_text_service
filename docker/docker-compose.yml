@@ -12,9 +12,9 @@ services:
     ports:
       - "8000:8000"
     networks:
-      - robot_network
+      - service_network
     restart: unless-stopped
 
 networks:
-  robot_network:
+  service_network:
     driver: bridge

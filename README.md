@@ -3,8 +3,6 @@
 **Speech-to-Text API** is a microservice based on **FastAPI** and **Whisper (OpenAI)** that transcribes audio and video into text.  
 The service supports **99+ languages**, including **English, Russian, Chinese, Spanish, and many more**.
 
-  The project is under development! Some functionality is still in the process of being written, and changes in the API and operating logic are possible.
-
 ## 🚀 Features
 - 🎤 **Audio transcription** (WAV, MP3, FLAC, AAC, OGG, M4A, etc.)
 - 🎥 **Extract audio from video** (MP4, MKV, AVI)
@@ -35,7 +33,7 @@ Whisper supports **99+ languages**. The full list is available in the [OpenAI re
 > **Requirements**: Python 3.9+, FFmpeg
 
 ```bash
-git clone https://github.com/your-repo/speech-to-text.git
+git clone https://github.com/AntonSHBK/speech_to_text_service
 cd speech-to-text
 
 # Install dependencies
@@ -64,11 +62,13 @@ Now the API is running in a container and available at **`http://localhost:8000/
 
 ## 🎯 How to Use the API?
 
-### **1️⃣ Upload an Audio File**
-📌 **POST `/transcribe/`** (send an audio file and receive text)
+### **📌 1️⃣ Upload an Audio File**
+📌 **POST `/transcribe/`** (Send an audio file and receive text)
 ```bash
 curl -X 'POST' \
   'http://127.0.0.1:8000/transcribe/' \
+  -H 'accept: application/json' \
+  -H 'Content-Type: multipart/form-data' \
   -F 'file=@audio.mp3'
 ```
 🔹 **Server Response:**
@@ -78,14 +78,17 @@ curl -X 'POST' \
   "transcription": "This is an example transcription"
 }
 ```
+✅ **Supported formats:** `wav, mp3, flac, ogg, aac, m4a, wma, aiff`  
 
 ---
 
-### **2️⃣ Transcription with Translation to English**
+### **📌 2️⃣ Transcription with Translation to English**
 📌 **Use `task="translate"`**
 ```bash
 curl -X 'POST' \
   'http://127.0.0.1:8000/transcribe/' \
+  -H 'accept: application/json' \
+  -H 'Content-Type: multipart/form-data' \
   -F 'file=@audio.mp3' \
   -F 'task=translate'
 ```
@@ -95,6 +98,36 @@ curl -X 'POST' \
   "filename": "audio.mp3",
   "transcription": "This is an example transcription in English"
 }
+```
+
+---
+
+### **📌 3️⃣ Customize Transcription with Parameters**
+You can control how the transcription is generated using various parameters.
+
+#### 🔹 **Available parameters:**
+| Parameter         | Description                                   | Default  |
+|------------------|---------------------------------------------|----------|
+| `language`       | Language code (`ru`, `en`, `fr`, etc.)      | `"ru"`   |
+| `task`           | `"transcribe"` (default) or `"translate"`   | `"transcribe"` |
+| `temperature`    | Controls randomness (0.0 = deterministic)  | `0.1`    |
+| `max_new_tokens` | Max length of transcription output         | `100`    |
+| `repetition_penalty` | Penalizes repeated words               | `1.2`    |
+| `num_beams`      | Beam search size (higher = better quality) | `1`      |
+| `do_sample`      | Enables sampling (more variability)        | `false`  |
+| `top_k`          | Selects next word from `k` best options    | `50`     |
+| `top_p`          | Nucleus sampling threshold                 | `0.95`   |
+
+#### 📌 **Example: More accurate transcription (beam search + repetition penalty)**
+```bash
+curl -X 'POST' \
+  'http://127.0.0.1:8000/transcribe/' \
+  -H 'accept: application/json' \
+  -H 'Content-Type: multipart/form-data' \
+  -F 'file=@audio.mp3' \
+  -F 'language=en' \
+  -F 'num_beams=5' \
+  -F 'repetition_penalty=1.1'
 ```
 
 ---

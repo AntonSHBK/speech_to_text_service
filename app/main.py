@@ -1,11 +1,14 @@
 from fastapi import FastAPI
-from routers.routers import router
+from app.routers.routers import router
+from app.config import CONFIG, init_dir
 
 app = FastAPI(title="Speech-to-Text API")
 
-# Подключаем маршруты
+init_dir()
+
 app.include_router(router)
 
 @app.get("/")
-def root():
-    return {"message": "Speech-to-Text API is running!"}
+def health_check():
+    """Простой эндпоинт для проверки работоспособности API."""
+    return {"status": "API is running"}

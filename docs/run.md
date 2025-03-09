@@ -62,7 +62,7 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
    docker logs -f speech-to-text-service  # Просмотр логов
    ```
 
-Теперь API доступно по **http://localhost:8000/docs** 🚀
+API доступно по **http://localhost:8000/docs** 🚀
 
 ---
 
