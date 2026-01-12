@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>ASR Interface</title>
+  <style>
+    body { font-family: sans-serif; margin: 40px; }
+    label { display: block; margin-top: 12px; }
+    button { margin-top: 20px; padding: 10px 20px; }
+    textarea { width: 100%; height: 150px; }
+  </style>
+</head>
+<body>
+
+<h2>Транскрипция аудио</h2>
+
+<form id="form">
+  <label>
+    Аудиофайл:
+    <input type="file" name="file" required>
+  </label>
+
+  <label>
+    Язык:
+    <select name="language">
+      <option value="ru">ru</option>
+      <option value="en">en</option>
+      <option value="auto">auto</option>
+    </select>
+  </label>
+
+  <label>
+    beam_size:
+    <input type="number" name="beam_size" value="1" min="1" max="10">
+  </label>
+
+  <label>
+    chunk_length:
+    <input type="number" name="chunk_length" value="20" min="5" max="60">
+  </label>
+
+  <label>
+    save_file:
+    <select name="save_file">
+      <option value="false">false</option>
+      <option value="true">true</option>      
+    </select>
+  </label>
+
+  <button type="submit">Транскрибировать</button>
+
+  <button id="saveBtn" style="display:none;">Сохранить результат</button>
+</form>
+
+<h3>Результат</h3>
+
+<div id="loader" style="display:none;">
+  <p>Идёт обработка...</p>
+</div>
+
+<textarea id="output"></textarea>
+
+<script>
+const form = document.getElementById("form");
+const loader = document.getElementById("loader");
+const output = document.getElementById("output");
+const saveBtn = document.getElementById("saveBtn");
+
+let lastText = "";
+
+form.onsubmit = async (e) => {
+  e.preventDefault();
+
+  output.value = "";
+  saveBtn.style.display = "none";
+  loader.style.display = "block";
+
+  const data = new FormData(form);
+
+  try {
+    const response = await fetch("/transcribe", {
+      method: "POST",
+      body: data
+    });
+
+    const result = await response.json();
+
+    lastText = result.text ?? "Пустой результат";
+    output.value = lastText;
+
+    saveBtn.style.display = "inline-block";
+
+  } catch (err) {
+    output.value = "Ошибка при обработке запроса";
+  } finally {
+    loader.style.display = "none";
+  }
+};
+
+saveBtn.onclick = () => {
+  const blob = new Blob([lastText], { type: "text/plain" });
+  const url = URL.createObjectURL(blob);
+
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "transcription.txt";
+  a.click();
+
+  URL.revokeObjectURL(url);
+};
+</script>
+
+</body>
+</html>

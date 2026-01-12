@@ -6,6 +6,7 @@ uvicorn==0.27.1
 transformers==4.38.2
 torch==2.1.0
 torchaudio==2.1.0
+faster-whisper==1.2.0
 
 # Обработка аудио и видео (FFmpeg, SoundFile)
 ffmpeg-python==0.2.0

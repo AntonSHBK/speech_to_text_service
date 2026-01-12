@@ -1,285 +1,217 @@
-import os
-import json
+import time
+from typing import List, Optional, Union
 from pathlib import Path
 
-from langcodes import Language
-import torch
-import torchaudio
-import torchaudio.transforms as transforms
+from faster_whisper import WhisperModel
+from faster_whisper.transcribe import Segment
 from transformers import WhisperProcessor, WhisperForConditionalGeneration
-import soundfile as sf
-import ffmpeg
 
 from app.models.base import BaseModel
 
 
-ALLOWED_AUDIO_EXTENSIONS = {".wav", ".mp3", ".flac", ".ogg", ".aac", ".m4a", ".wma", ".aiff"}
-
-
-class WhisperTranscriber(BaseModel):
-    """Класс транскрипции на основе openai/whisper"""
-
-    def __init__(self, model_name="openai/whisper-tiny", cache_dir: str = '', device: str = None, **kwargs):
-        """
-        Инициализация WhisperTranscriber.
-
-        Args:
-            model_name (str): Название модели Hugging Face.
-            cache_dir (str): Директория для кеша модели.
-            device (str): Устройство (cpu/gpu).
-            **kwargs: Дополнительные параметры для модели.
-        """
-        # Используем параметры из kwargs
-        device = device or kwargs.get("device", "cuda" if torch.cuda.is_available() else "cpu")
-        super().__init__(model_name, cache_dir, device, **kwargs)
-        
-        # Загружаем модель
-        self.load_model()
-
-    def load_model(self):
-        """Загрузка модели и процессора."""
-        print(f"Загружаем модель {self.model_name}... cache_dir - {self.cache_dir}")
-        
-        self.processor: WhisperProcessor = WhisperProcessor.from_pretrained(
-            self.model_name, cache_dir=self.cache_dir)
-        
-        self.model = WhisperForConditionalGeneration.from_pretrained(
-            self.model_name, cache_dir=self.cache_dir, device_map="auto"
-        ).to(self.device)
-        
-        print("Модель загружена.")
-
-    @staticmethod
-    def load_audio_file(audio_path: str, target_sample_rate: int = 16000):
-        """
-        Загружает аудиофайл и конвертирует его в 16 kHz WAV при необходимости.
-
-        Поддерживаемые форматы: WAV, MP3, FLAC, OGG, AAC, M4A, WMA, AIFF.
-
-        Если файл не в формате WAV, он автоматически конвертируется в WAV с помощью FFmpeg.
-
-        Args:
-            audio_path (str): Путь к аудиофайлу.
-            target_sample_rate (int): Целевая частота дискретизации (по умолчанию 16 kHz).
-
-        Returns:
-            torch.Tensor: Аудиоданные в формате (1, N).
-            int: Частота дискретизации (обычно 16000).
-        """
-        audio_path = Path(audio_path)
-
-        # Проверяем, является ли файл WAV, если нет - конвертируем
-        if audio_path.suffix.lower() not in [".wav"]:
-            print(f"⚠ Конвертируем {audio_path.suffix} в WAV...")
-
-            temp_wav_path = audio_path.with_suffix(".wav")
-
-            try:
-                (
-                    ffmpeg
-                    .input(str(audio_path))
-                    .output(str(temp_wav_path), format="wav", ar=target_sample_rate, ac=1)
-                    .run(overwrite_output=True, quiet=True)
-                )
-                audio_path = temp_wav_path  # Обновляем путь на новый WAV
-            except Exception as e:
-                raise RuntimeError(f"Ошибка при конвертации {audio_path}: {e}")
-
-        # Загружаем аудиофайл через torchaudio
-        try:
-            audio, sample_rate = torchaudio.load(str(audio_path))
-        except Exception as e:
-            raise RuntimeError(f"Ошибка загрузки аудио: {e}")
-
-        # Если частота не совпадает с 16 kHz, ресемплируем
-        if sample_rate != target_sample_rate:
-            resampler = transforms.Resample(orig_freq=sample_rate, new_freq=target_sample_rate)
-            audio = resampler(audio)
-
-        # Преобразуем стерео в моно (усредняем каналы)
-        if audio.shape[0] > 1:
-            audio = audio.mean(dim=0, keepdim=True)
-
-        return audio, sample_rate
-
-    @staticmethod
-    def load_audio_torchaudio(audio_path: str, **kwargs):
-        """Загружает аудиофайл через torchaudio"""
-        audio, rate = torchaudio.load(audio_path)
-        return torch.tensor(audio), rate
+class FastWhisperTranscriber(BaseModel):
     
-    @staticmethod
-    def load_audio_soundfile(audio_path: str, **kwargs):
-        """Загружает аудиофайл через soundfile"""
-        dtype = kwargs.get('load_dtype', 'float32')
-        audio, rate = sf.read(audio_path, dtype=dtype)
-        return torch.tensor(audio), rate
-
-    def preprocess_audio(self, audio_path: str) -> torch.Tensor:
-        """Загрузка и обработка аудиофайла (конвертация в WAV, ресемплирование)."""
-
-        # Проверяем, существует ли файл
-        if not os.path.exists(audio_path):
-            raise FileNotFoundError(f"Файл {audio_path} не найден!")
+    def __init__(
+        self,
+        model_name: str, 
+        cache_dir: Path = 'cache_dir', 
+        device: str = 'cpu', 
+        token: str = None,
+        compute_type: str = "default",
+        cpu_threads: int = 4,
+        num_workers: int = 8
         
-        # Проверка на формат
-        if Path(audio_path).suffix.lower() not in ALLOWED_AUDIO_EXTENSIONS:
-            raise ValueError(f"Формат файла {audio_path} не поддерживается!")
+    ):
+        super().__init__(model_name, cache_dir, device)
+        self.model = self.load_model(
+            model_name, 
+            use_auth_token=token, 
+            compute_type=compute_type,
+            cpu_threads=cpu_threads, 
+            num_workers=num_workers
+        )
 
-        # Загружаем аудио (через torchaudio или soundfile)
-        try:
-            audio, rate = self.load_audio_torchaudio(audio_path, **self.params_dict)
-        except RuntimeError:
-            print(f"⚠ Ошибка загрузки {audio_path} через torchaudio, пробуем soundfile...")
-            audio, rate = self.load_audio_soundfile(audio_path, **self.params_dict)
-
-        # Если частота не 16 kHz, ресемплируем
-        if rate != 16000:
-            resampler = transforms.Resample(orig_freq=rate, new_freq=16000)
-            audio = resampler(audio)
-
-        # Приводим стерео в моно
-        if audio.shape[0] > 1:
-            audio = audio.mean(dim=0, keepdim=True)
-
-        return audio.to(torch.float32)
-
-    def transcribe_audio(
+    def load_model(
         self, 
-        audio_tensor: torch.Tensor, 
-        language: str = "ru", 
-        task: str = "transcribe", 
+        model_name: str,
+        use_auth_token: str = None,
+        compute_type: str = "default",
+        cpu_threads: int = 4,
+        num_workers: int = 8
+    ) -> "WhisperModel":      
+        model = WhisperModel(
+            model_size_or_path=model_name,
+            device=self.device,
+            download_root=str(self.cache_dir),
+            use_auth_token=use_auth_token,
+            compute_type=compute_type,
+            cpu_threads=cpu_threads,
+            num_workers=num_workers
+        )
+        self.logger.info(f"Модель {model_name} загружена.")
+        return model
+    
+    def process(self, audio_path: str | Path) -> Path:
+        return audio_path
+
+    def transcribe(
+        self,
+        audio_path: Union[str, Path],
+        language: Optional[str] = "ru",
+        task: str = "transcribe",
+        beam_size: int = 1,
+        chunk_length: int = 20,
+        patience: float = 1.0,
+        length_penalty: float = 1.0,
+        repetition_penalty: float = 1.0,
+        multilingual: bool = False,
         **kwargs
-    ) -> str:
-        """
-        Выполняет транскрипцию аудиоданных в формате тензора с возможностью гибкой настройки параметров генерации.
+    ) -> dict:
 
-        Args:
-            audio_tensor (torch.Tensor): Аудиоданные в формате (1, N), предобработанные методом `preprocess_audio`.
-            language (str, optional): Язык транскрипции. По умолчанию `"ru"`.
-                - `"ru"` - русский
-                - `"en"` - английский
-            task (str, optional): Тип задачи. По умолчанию `"transcribe"`.
-                - `"transcribe"` - стандартная транскрипция (оставляет исходный язык)
-                - `"translate"` - перевод на английский
-            **kwargs: Дополнительные параметры для метода `self.model.generate()`:
-                - `temperature` (float, optional): Параметр, контролирующий случайность предсказания. По умолчанию `0.1`.
-                    - `0.0` - детерминированный результат
-                    - `>0.0` - больше случайности (например, `0.1`)
-                - `max_new_tokens` (int, optional): Максимальное количество новых токенов в выходе. 
-                    - Рекомендуется устанавливать в соответствии с ожидаемой длиной транскрипции.
-                    - Например, для коротких аудиозаписей `100`, для длинных — `500` и более.
-                - `repetition_penalty` (float, optional): Штраф за повторяющиеся слова.
-                    - `1.0` - без штрафа.
-                    - `> 1.0` - чем выше, тем меньше повторов (рекомендуется `1.1-1.5`).
-                - `length_penalty` (float, optional): Регулировка длины выхода.
-                    - `> 1.0` - способствует более длинным транскрипциям.
-                    - `< 1.0` - сокращает текст.
-                - `num_beams` (int, optional): Количество "лучей" в beam search (по умолчанию `1`).
-                    - Большее значение может улучшить качество, но увеличивает вычислительную нагрузку.
-                    - Оптимально `3-5` для улучшенного поиска.
-                - `early_stopping` (bool, optional): Останавливает генерацию при `eos_token` (по умолчанию `True`).
-                    - Полезно для предотвращения лишних продолжений в тексте.
-                - `suppress_tokens` (list, optional): Запрещенные токены.
-                    - Например, `[50257]` исключает английские слова.
-                - `top_k` (int, optional): Выбирает следующее слово из `k` наиболее вероятных.
-                    - Используется для управления разнообразием.
-                    - Например, `top_k=50` ограничит выбор 50 самыми вероятными вариантами.
-                - `top_p` (float, optional): Ограничивает выбор следующего слова на основе совокупной вероятности `p`.
-                    - Альтернатива `top_k`, полезно для более естественной речи.
-                    - Рекомендуется `top_p=0.95` для баланса между точностью и разнообразием.
-                - `do_sample` (bool, optional): Включает случайное сэмплирование.
-                    - Полезно, если требуется более творческое или вариативное предсказание.
-
-        **Рекомендации по выбору параметров:**
-            - **Детальная и точная транскрипция** → `num_beams=5, early_stopping=True, repetition_penalty=1.1`
-            - **Максимальная скорость обработки** → `num_beams=1, temperature=0.0`
-            - **Генерация длинных текстов** → `length_penalty=1.5, max_new_tokens=300`
-            - **Борьба с повторами** → `repetition_penalty=1.2`
-            - **Эксперимент с творческим режимом** → `do_sample=True, top_k=50, top_p=0.95, temperature=0.7`
-
-        Returns:
-            str: Транскрибированный текст.
-        """
-
-        # Преобразуем аудио в формат Whisper
-        inputs = self.processor(audio_tensor.squeeze(0), sampling_rate=16000, return_tensors="pt")
-
-        # Подготавливаем input для модели
-        input_features = inputs.input_features.to(self.device)
-        attention_mask = inputs.attention_mask.to(self.device) if "attention_mask" in inputs else None
+        self.logger.info(f"Старт транскрипции: {audio_path}")
         
-        # Принудительно указываем язык и задачу
-        forced_decoder_ids = self.processor.get_decoder_prompt_ids(language=language, task=task)
+        audio_path = self.process(audio_path)
+        
+        start_time = time.perf_counter()
 
-        # Передаем параметры в `generate`
-        with torch.no_grad():
-            predicted_ids = self.model.generate(
-                input_features,
-                attention_mask=attention_mask,
-                forced_decoder_ids=forced_decoder_ids,
-                **kwargs
-            )
+        segments, info = self.model.transcribe(
+            audio=str(audio_path),
+            language=language,
+            task=task,
+            patience=patience,
+            length_penalty=length_penalty,
+            repetition_penalty=repetition_penalty,
+            beam_size=beam_size,
+            chunk_length=chunk_length,
+            multilingual=multilingual,
+            **kwargs,
+        )
 
-        # Проверяем, есть ли результат
-        if predicted_ids is None or predicted_ids.shape[1] == 0:
-            return "Ошибка: транскрипция не удалась"
+        collected_segments: List[Segment] = []
+        text_parts: List[str] = []
+        
+        last_logged = 0   
+        
+        for s in segments:
+            collected_segments.append(s)
+            text_parts.append(s.text.strip())
 
-        # Декодируем текст
-        skip_special_tokens = kwargs.get('decode_skip_special_tokens', True)
-        transcription = self.processor.batch_decode(predicted_ids, skip_special_tokens=skip_special_tokens)[0]
-        return transcription if transcription.strip() else "Ошибка: пустая транскрипция"
+            progress = min(100.0, (s.end / info.duration) * 100)
 
-    def transcribe_audio_file(
-            self, 
-            audio_path: str, 
-            language: str = "ru", 
-            task: str = "transcribe", 
-            **kwargs
-        ) -> str:
-        """
-        Выполняет транскрипцию аудиофайла (загружает его, предобрабатывает и передает в `transcribe_audio`).
+            if int(progress) >= last_logged + 2:
+                last_logged = int(progress)
+                self.logger.info(f"Прогресс: {progress:.1f}%")
+                
+        end_time = time.perf_counter()
 
-        Args:
-            audio_path (str): Путь к аудиофайлу.
-            language (str, optional): Язык транскрипции. По умолчанию `"ru"`.
-            task (str, optional): Тип задачи (`"transcribe"` или `"translate"`).
-            **kwargs: Дополнительные параметры для `self.model.generate()`.
+        processing_time = end_time - start_time
+        audio_duration = info.duration
+        speed_ratio = audio_duration / processing_time if processing_time > 0 else 0
 
-        Returns:
-            str: Транскрибированный текст.
-        """
-        audio_tensor = self.preprocess_audio(audio_path)
-        transcription = self.transcribe_audio(audio_tensor, language, task, **kwargs)
-        return transcription
+        self.logger.info(
+            f"Транскрипция завершена: {audio_path} | "
+            f"Длительность аудио: {audio_duration:.2f} сек | "
+            f"Время обработки: {processing_time:.2f} сек | "
+            f"Скорость: x{speed_ratio:.2f} секунд видео в секунду"
+        )
 
-    def save_transcription(self, text: str, output_path: str):
-        """Сохранить транскрипцию в файл JSON."""
-        output_dir = Path(output_path).parent
-        output_dir.mkdir(parents=True, exist_ok=True)
-        with open(output_path, "w", encoding="utf-8") as f:
-            json.dump({"transcription": text}, f, ensure_ascii=False, indent=4)
-        print(f"Транскрипция сохранена: {output_path}")
+        full_text = " ".join(
+            part.strip()
+            for part in text_parts
+                if part and part.strip()
+        )
 
-    def batch_transcribe(self, audio_files: list, output_dir: str, **kwargs):
-        """Обработать несколько аудиофайлов и сохранить результаты."""
-        results = {}
-        for audio_path in audio_files:
-            try:
-                language = kwargs.get('language', 'ru')
-                task = kwargs.get('task', 'transcribe')
-                text = self.transcribe_audio_file(audio_path, language, task, **kwargs)
-                output_path = os.path.join(output_dir, Path(audio_path).stem + ".json")
-                self.save_transcription(text, output_path)
-                results[audio_path] = text
-            except Exception as e:
-                print(f"Ошибка при обработке {audio_path}: {e}")
-        return results
+        return {
+            "language": info.language,
+            "duration": info.duration,
+            "text": full_text,
+            "segments": [
+                {"start": s.start, "end": s.end, "text": s.text.strip()}
+                for s in collected_segments
+            ],
+        }
 
 
-if __name__ == "__main__":  
-    transcriber = WhisperTranscriber(model_name="openai/whisper-tiny", cache_dir='app/data/cache_dir')
-    audio_file = "./app/data/input/test.wav"
-    transcript = transcriber.transcribe_audio_file(audio_file)
-    print("Транскрипция:", transcript)
-    transcriber.save_transcription(transcript, "./app/data/output/sample.json")
+# class WhisperTranscriber(BaseModel):
+#     """Транскрибатор на базе openai/whisper (Transformers)."""
+
+#     def __init__(
+#         self,
+#         model_name: str = "openai/whisper-small",
+#         cache_dir: Path = "cache_dir",
+#         device: str = "cpu",
+#     ):
+#         super().__init__(model_name, cache_dir, device)
+#         self.model, self.processor = self.load_model(model_name)
+
+#     def load_model(self, model_name: str):
+#         self.processor = WhisperProcessor.from_pretrained(model_name, cache_dir=self.cache_dir)
+#         self.model = WhisperForConditionalGeneration.from_pretrained(
+#             model_name, cache_dir=self.cache_dir
+#         ).to(self.device)
+#         return self.model, self.processor
+
+
+#     def _load_audio(self, audio_path: str) -> AudioSegment:
+#         audio: AudioSegment = AudioSegment.from_file(audio_path)
+#         audio = audio.set_channels(1)
+#         audio = audio.set_frame_rate(16000)
+#         return audio
+
+#     def _split_audio(self, audio: AudioSegment, chunk_length_ms: int) -> List[AudioSegment]:
+#         return [audio[i:i + chunk_length_ms] for i in range(0, len(audio), chunk_length_ms)]
+
+#     def process(self, audio_path: str, chunk_length_ms: int = 30_000) -> List[io.BytesIO]:
+#         audio = self._load_audio(audio_path)
+#         chunks = self._split_audio(audio, chunk_length_ms)
+
+#         buffers = []
+#         for chunk in chunks:
+#             buf = io.BytesIO()
+#             chunk.export(buf, format="wav")
+#             buf.seek(0)
+#             buffers.append(buf)
+#         return buffers
+
+
+#     def _infer(self, audio_buffer: io.BytesIO, language: str, task: str, **gen_kwargs):
+#         audio = AudioSegment.from_file(audio_buffer).get_array_of_samples()
+#         audio = torch.tensor(audio, dtype=torch.float32).unsqueeze(0) / 32768.0
+
+#         inputs = self.processor(audio.squeeze(0), sampling_rate=16000, return_tensors="pt")
+#         input_features = inputs.input_features.to(self.device)
+
+#         forced_ids = self.processor.get_decoder_prompt_ids(language=language, task=task)
+
+#         with torch.no_grad():
+#             predicted_ids = self.model.generate(
+#                 input_features,
+#                 forced_decoder_ids=forced_ids,
+#                 **gen_kwargs,
+#             )
+
+#         return self.processor.batch_decode(predicted_ids, skip_special_tokens=True)[0]
+
+#     def transcribe(
+#         self,
+#         audio_path: str,
+#         chunk_length_ms: int = 30_000,
+#         language: str = "ru",
+#         task: str = "transcribe",
+#         **gen_kwargs,
+#     ) -> dict:
+
+#         buffers = self.process(audio_path, chunk_length_ms)
+
+#         full_text = []
+
+#         for buf in buffers:
+#             text = self._infer(buf, language, task, **gen_kwargs).strip()
+#             if text:
+#                 full_text.append(text)
+
+#         return {
+#             "language": language,
+#             "duration": len(buffers) * (chunk_length_ms / 1000),
+#             "text": " ".join(full_text),
+#         }

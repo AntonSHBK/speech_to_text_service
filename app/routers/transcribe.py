@@ -1,0 +1,55 @@
+import uuid
+from pathlib import Path
+
+from fastapi import APIRouter, UploadFile, File, Query, HTTPException
+from fastapi.concurrency import run_in_threadpool
+
+from app.settings import settings
+from app.service.transcriber import transcriber_service
+
+router = APIRouter(tags=["Transcription"])
+
+@router.post("/transcribe/")
+async def transcribe(
+    file: UploadFile = File(...),
+    language: str = Query("ru", description="Язык транскрипции (например, 'ru', 'en')"),
+    task: str = Query("transcribe", description="Тип задачи ('transcribe' или 'translate')"),
+    beam_size: int = Query(1, ge=1, le=10, description="Размер beam search"),
+    chunk_length: int = Query(20, ge=5, le=60, description="Длина чанка в секундах"),
+    patience: float = Query(1.0, ge=0.0, description="Patience"),
+    length_penalty: float = Query(1.0, ge=0.0, description="Length penalty"),
+    repetition_penalty: float = Query(1.0, ge=0.0, description="Repetition penalty"),
+    multilingual: bool = Query(False, description="Поддержка нескольких языков"),
+    save_file: bool = Query(False, description="Сохранять ли файл"),
+    save_result: bool = Query(False, description="Сохранять ли результат транскрипции"),
+):
+    if not transcriber_service.is_ready():
+        raise HTTPException(503, "Transcription service not ready")
+
+    raw_bytes = await file.read()
+    filename = Path(file.filename)
+
+    audio_source = await transcriber_service.prepare_audio(
+        raw_bytes=raw_bytes,
+        filename=filename,
+        save_file=save_file
+    )
+
+    result = await run_in_threadpool(
+        transcriber_service.get().transcribe,
+        audio_source,
+        language=language,
+        task=task,
+        beam_size=beam_size,
+        chunk_length=chunk_length,
+        patience=patience,
+        length_penalty=length_penalty,
+        repetition_penalty=repetition_penalty,
+        multilingual=multilingual
+    )
+
+    if save_result:
+        result_file = await transcriber_service.export_result(result, filename)
+        result['result_file'] = str(result_file)
+
+    return result

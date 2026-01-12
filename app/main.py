@@ -1,11 +1,26 @@
 from fastapi import FastAPI
-from app.routers.routers import router
-from app.config import CONFIG, init_dir
+from contextlib import asynccontextmanager
 
-app = FastAPI(title="Speech-to-Text API")
+from app.routers import router
+from app.settings import settings
+from app.service.transcriber import transcriber_service
 
-init_dir()
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    transcriber_service.init(
+        model_name=settings.MODEL_NAME,
+        device=settings.DEVICE,
+        cache_dir=settings.CACHE_DIR,
+        token=None,
+        compute_type="default",
+        cpu_threads=8,
+        num_workers=16,
+    )
+
+    yield
+
+app = FastAPI(lifespan=lifespan, title="Speech-to-Text API")
 app.include_router(router)
 
 @app.get("/")

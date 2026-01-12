@@ -1,150 +1,188 @@
-# 🗣️ Speech-to-Text API (Whisper)
+# Speech-to-Text API (Whisper)
 
-**Speech-to-Text API** is a microservice based on **FastAPI** and **Whisper (OpenAI)** that transcribes audio and video into text.  
-The service supports **99+ languages**, including **English, Russian, Chinese, Spanish, and many more**.
+**Speech-to-Text API** is a production-ready microservice for automatic speech recognition built with **FastAPI** and **OpenAI Whisper** (via **faster-whisper**).
+The service provides high-quality transcription for audio and video files with support for **multilingual speech recognition**, optimized for CPU inference.
 
-## 🚀 Features
-- 🎤 **Audio transcription** (WAV, MP3, FLAC, AAC, OGG, M4A, etc.)
-- 🎥 **Extract audio from video** (MP4, MKV, AVI)
-- 🌍 **Supports 99+ languages** (see the table below)
-- 🔄 **Optional translation into English**
-- 🏗 **Asynchronous API for integration**
-- 🐳 **Docker-ready deployment**
+## Features
 
----
+* Audio transcription (WAV, MP3, FLAC, AAC, OGG, M4A, etc.)
+* Audio extraction from video files (MP4, MKV, AVI)
+* Multilingual transcription (99+ languages supported by Whisper)
+* Optional translation to English
+* High-performance inference using **faster-whisper**
+* Clean service architecture: models / service / routers separation
+* Asynchronous FastAPI interface
+* Persistent storage for source files and transcription results
+* DOCX export with formatted transcription output
+* Docker-ready deployment
 
-## 🌍 Supported Languages
+## Supported Languages
 
-| #  | Language        | Code | #  | Language       | Code |
-|----|---------------|------|----|--------------|------|
-| 1  | English       | `en` | 6  | Spanish       | `es` |
-| 2  | Russian       | `ru` | 7  | Portuguese    | `pt` |
-| 3  | Chinese       | `zh` | 8  | Arabic        | `ar` |
-| 4  | French        | `fr` | 9  | Japanese      | `ja` |
-| 5  | German        | `de` | 10 | Hindi         | `hi` |
+Whisper supports more than **99 languages**, including but not limited to:
 
-Whisper supports **99+ languages**. The full list is available in the [OpenAI repository](https://github.com/openai/whisper).
+| Language | Code | Language   | Code |
+| -------- | ---- | ---------- | ---- |
+| English  | en   | Spanish    | es   |
+| Russian  | ru   | Portuguese | pt   |
+| Chinese  | zh   | Arabic     | ar   |
+| French   | fr   | Japanese   | ja   |
+| German   | de   | Hindi      | hi   |
 
----
+The full language list is available in the official Whisper repository.
 
-## 🛠️ Installation & Setup
+## Architecture Overview
 
-### **1️⃣ Run Locally (without Docker)**
-> **Requirements**: Python 3.9+, FFmpeg
+```
+app/
+ ├─ models/        # Model definitions (no runtime objects)
+ ├─ service/       # Runtime services and business logic
+ ├─ routers/       # HTTP API endpoints
+ ├─ settings.py    # Global configuration (Pydantic Settings)
+ ├─ main.py        # Application lifecycle & startup
+```
+
+* **models**: Pure class definitions for transcription engines
+* **service**: Holds live model instances and processing pipeline
+* **routers**: API layer (FastAPI endpoints)
+* **main**: Controls application startup and lifecycle via lifespan
+
+## Installation & Setup
+
+### Run Locally
+
+### Requirements
+
+**Python 3.10+, FFmpeg**
+
+FFmpeg is required for audio processing.
+
+You can download FFmpeg from the official website: 
+[https://ffmpeg.org/download.html](https://ffmpeg.org/download.html)
+
+#### Windows
+
+For Windows users, download the **static build** of FFmpeg (ZIP archive), extract it, and add the path to the `bin` directory (where `ffmpeg.exe` is located) to your system **PATH** environment variable.
+
+After that, make sure FFmpeg is accessible from the command line:
+
+```bash
+ffmpeg -version
+```
+
+If the command works, FFmpeg is correctly installed.
+
+### Next
 
 ```bash
 git clone https://github.com/AntonSHBK/speech_to_text_service
-cd speech-to-text
+cd speech_to_text_service
 
-# Install dependencies
 pip install -r requirements.txt
 
-# Start the FastAPI server
 uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
-Now the API is available at **`http://127.0.0.1:8000/docs`** 📜
 
----
+API documentation will be available at:
 
-### **2️⃣ Run with Docker**
-> **Requirements**: Docker & Docker Compose
+```
+http://127.0.0.1:8000/docs
+```
+
+### Docker Deployment
 
 ```bash
-# Build the container
 docker-compose build
-
-# Start the service
 docker-compose up -d
 ```
-Now the API is running in a container and available at **`http://localhost:8000/docs`**
 
----
+The API will be available at:
 
-## 🎯 How to Use the API?
-
-### **📌 1️⃣ Upload an Audio File**
-📌 **POST `/transcribe/`** (Send an audio file and receive text)
-```bash
-curl -X 'POST' \
-  'http://127.0.0.1:8000/transcribe/' \
-  -H 'accept: application/json' \
-  -H 'Content-Type: multipart/form-data' \
-  -F 'file=@audio.mp3'
 ```
-🔹 **Server Response:**
+http://localhost:8000/docs
+```
+
+### Optional Web Interface (Local UI)
+
+The service also includes a lightweight built-in web interface for local usage and testing.
+It allows uploading audio files, adjusting transcription parameters and saving the resulting text without using the API client.
+
+To enable the interface, set the following environment variable:
+
+```env
+USE_INTERFACE=true
+```
+
+Then start the server as usual.
+
+The web interface will be available at:
+
+```
+http://127.0.0.1:8000/ui
+```
+
+You can use this page as a simple local application for interactive transcription.
+
+## API Usage
+
+### Health Check
+
+```http
+GET /
+```
+
+Response:
+
+```json
+{ "status": "API is running" }
+```
+
+### Transcription Endpoint
+
+```http
+POST /transcribe/
+```
+
+#### Parameters
+
+| Name               | Type   | Description                 |
+| ------------------ | ------ | --------------------------- |
+| file               | file   | Audio or video file         |
+| language           | string | Language code (default: ru) |
+| task               | string | transcribe or translate     |
+| beam_size          | int    | Beam search size            |
+| chunk_length       | int    | Chunk length in seconds     |
+| patience           | float  | Decoding patience           |
+| length_penalty     | float  | Length penalty              |
+| repetition_penalty | float  | Repetition penalty          |
+| save_file          | bool   | Save uploaded audio         |
+| save_result        | bool   | Save DOCX transcription     |
+
+#### Example
+
+```bash
+curl -X POST http://127.0.0.1:8000/transcribe/ \
+  -F "file=@audio.mp3" \
+  -F "language=ru" \
+  -F "save_file=true" \
+  -F "save_result=true"
+```
+
+#### Example Response
+
 ```json
 {
-  "filename": "audio.mp3",
-  "transcription": "This is an example transcription"
-}
-```
-✅ **Supported formats:** `wav, mp3, flac, ogg, aac, m4a, wma, aiff`  
-
----
-
-### **📌 2️⃣ Transcription with Translation to English**
-📌 **Use `task="translate"`**
-```bash
-curl -X 'POST' \
-  'http://127.0.0.1:8000/transcribe/' \
-  -H 'accept: application/json' \
-  -H 'Content-Type: multipart/form-data' \
-  -F 'file=@audio.mp3' \
-  -F 'task=translate'
-```
-🔹 **Server Response:**
-```json
-{
-  "filename": "audio.mp3",
-  "transcription": "This is an example transcription in English"
+  "language": "ru",
+  "duration": 42.8,
+  "text": "Full transcription text",
+  "segments": [
+    { "start": 0.0, "end": 4.2, "text": "Segment text" }
+  ],
+  "result_file": "data/transcriptions/audio_20240110_123045.docx"
 }
 ```
 
----
-
-### **📌 3️⃣ Customize Transcription with Parameters**
-You can control how the transcription is generated using various parameters.
-
-#### 🔹 **Available parameters:**
-| Parameter         | Description                                   | Default  |
-|------------------|---------------------------------------------|----------|
-| `language`       | Language code (`ru`, `en`, `fr`, etc.)      | `"ru"`   |
-| `task`           | `"transcribe"` (default) or `"translate"`   | `"transcribe"` |
-| `temperature`    | Controls randomness (0.0 = deterministic)  | `0.1`    |
-| `max_new_tokens` | Max length of transcription output         | `100`    |
-| `repetition_penalty` | Penalizes repeated words               | `1.2`    |
-| `num_beams`      | Beam search size (higher = better quality) | `1`      |
-| `do_sample`      | Enables sampling (more variability)        | `false`  |
-| `top_k`          | Selects next word from `k` best options    | `50`     |
-| `top_p`          | Nucleus sampling threshold                 | `0.95`   |
-
-#### 📌 **Example: More accurate transcription (beam search + repetition penalty)**
-```bash
-curl -X 'POST' \
-  'http://127.0.0.1:8000/transcribe/' \
-  -H 'accept: application/json' \
-  -H 'Content-Type: multipart/form-data' \
-  -F 'file=@audio.mp3' \
-  -F 'language=en' \
-  -F 'num_beams=5' \
-  -F 'repetition_penalty=1.1'
-```
-
----
-
-## 🎯 Use Cases
-
-✅ **1. Transcribing interviews & lectures** — Automatic speech-to-text for meetings and podcasts  
-✅ **2. Voice notes & subtitles** — Convert speech into subtitles for videos and recordings  
-✅ **3. Call transcription** — Process phone conversations and customer support calls  
-✅ **4. Voice commands & chatbots** — Integrate into voice assistants and AI chatbots  
-
----
-
-## 🛠 Support & Contributions
+## Support & Contributions
 If you have ideas for improvement or found a bug, create an **Issue** or **Pull Request** in the [project repository](https://github.com/AntonSHBK/speech_to_text_service).
 
-**👨‍💻 Author:** [Anton Pisarenko](https://github.com/AntonSHBK)  
-**🔗 License:** Apache License 2.0  
-
-🚀 **Start using the Speech-to-Text API today!** 🎙️
+**Author:** [Anton Pisarenko](https://github.com/AntonSHBK)  
+**License:** Apache License 2.0  

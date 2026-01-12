@@ -1,61 +1,66 @@
 import sys
 import os
+from pathlib import Path
+
 import pytest
-import httpx
 from fastapi.testclient import TestClient
 
-# Добавляем путь к корневой директории проекта
+# чтобы тест видел app/
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../")))
 
 from app.main import app
-
-client = TestClient(app)
-
-@pytest.fixture
-def test_audio():
-    """Фикстура для тестового аудиофайла."""
-    return "./app/data/input/test.wav"
+from app.settings import settings
+from app.service.transcriber import transcriber_service
 
 
-def test_transcribe_endpoint(test_audio):
-    """Тестируем эндпоинт `/transcribe/` с реальным аудиофайлом."""
-    with open(test_audio, "rb") as f:
-        files = {"file": ("test.wav", f, "audio/wav")}
-        response = client.post("/transcribe/", files=files)
-
-    assert response.status_code == 200, "Ошибка: статус-код API не 200"
-    data = response.json()
-
-    assert "transcription" in data, "Ошибка: API не вернуло транскрипцию"
-    assert isinstance(data["transcription"], str), "Ошибка: транскрипция должна быть строкой"
-    assert len(data["transcription"]) > 0, "Ошибка: транскрипция пустая"
+TEST_AUDIO_FILE: Path = settings.AUDIO_DIR / "test_video_3.mp4"
 
 
-def test_transcribe_with_params(test_audio):
-    """Тестируем передачу параметров `kwargs` в API."""
-    with open(test_audio, "rb") as f:
-        files = {"file": ("test.wav", f, "audio/wav")}
+@pytest.fixture(scope="session")
+def client():
+    with TestClient(app) as client:
+        yield client
+
+@pytest.mark.order(1)
+def test_service_ready(client: TestClient):
+    response = client.get("/")
+    assert response.status_code == 200
+    assert response.json() == {"status": "API is running"}
+
+
+@pytest.mark.order(2)
+def test_transcription_flow(client: TestClient):
+    assert TEST_AUDIO_FILE.exists(), f"Test file not found: {TEST_AUDIO_FILE}"
+
+    with open(TEST_AUDIO_FILE, "rb") as f:
         response = client.post(
-            "/transcribe/?temperature=0.5&max_new_tokens=50", files=files
+            "/transcribe/",
+            files={"file": ("test_video_3.mp4", f, "video/mp4")},
+            params={
+                "language": "ru",
+                "save_file": True,
+                "save_result": True,
+            },
         )
 
-    assert response.status_code == 200, "Ошибка: API не вернуло 200"
+    assert response.status_code == 200, response.text
+
     data = response.json()
 
-    assert "transcription" in data, "Ошибка: API не вернуло транскрипцию"
-    assert "parameters" in data, "Ошибка: API не вернуло параметры"
-    assert data["parameters"]["temperature"] == 0.5, "Ошибка: параметр `temperature` не передался"
-    assert data["parameters"]["max_new_tokens"] == 50, "Ошибка: параметр `max_new_tokens` не передался"
+    # Проверка, что транскрипция выполнена
+    assert "text" in data
+    assert len(data["text"]) > 0
 
-# def test_invalid_file():
-#     """Тестируем API с неверным файлом (не аудио)."""
-#     files = {"file": ("invalid.txt", b"not an audio file", "text/plain")}
-    
-#     response = client.post("/transcribe/", files=files)
+    # Проверка сегментов
+    assert "segments" in data
+    assert isinstance(data["segments"], list)
+    assert len(data["segments"]) > 0
 
-#     # Проверяем, что API возвращает код ошибки 400
-#     assert response.status_code == 400
-#     assert response.json() == {"detail": "Формат файла app/data/input/invalid.txt не поддерживается!"}
+    # Проверка сохранения результата
+    assert "result_file" in data
+    result_path = Path(data["result_file"])
+    assert result_path.exists(), f"Result file not found: {result_path}"
 
-
-
+    # Проверка, что исходный файл сохранён
+    saved_files = list(settings.AUDIO_DIR.glob("*test_video_3*"))
+    assert len(saved_files) > 0, "Original audio file was not saved"
