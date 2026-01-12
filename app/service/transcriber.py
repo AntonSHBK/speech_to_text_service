@@ -57,9 +57,9 @@ class TranscriberService:
     async def export_result(self, result: dict, source_filename: str) -> Path:
         stem = Path(source_filename).stem[:20]
         uid = uuid.uuid4().hex
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        timestamp = datetime.now().strftime("%d_%m_%Y_%H%M%S")
 
-        filename = f"{stem}_{timestamp}_{uid}.docx"
+        filename = f"{stem}_{timestamp}.docx"
         path = settings.TRANSCRIBE_RESULTS_DIR / filename
 
         document = Document()
