@@ -14,8 +14,8 @@ async def lifespan(app: FastAPI):
         cache_dir=settings.CACHE_DIR,
         token=None,
         compute_type="default",
-        cpu_threads=8,
-        num_workers=16,
+        cpu_threads=settings.MODEL_CPU_THREADS,
+        num_workers=settings.MODEL_NUM_WORKERS,
     )
 
     yield
