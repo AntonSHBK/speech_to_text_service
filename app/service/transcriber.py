@@ -54,7 +54,11 @@ class TranscriberService:
         tmp.flush()
         return Path(tmp.name)
     
-    async def export_result(self, result: dict, source_filename: str) -> Path:
+    async def export_result(
+        self, 
+        result: dict, 
+        source_filename: str
+    ) -> Path:
         stem = Path(source_filename).stem[:20]
         uid = uuid.uuid4().hex
         timestamp = datetime.now().strftime("%d_%m_%Y_%H%M%S")
