@@ -163,6 +163,7 @@ POST /transcribe/
 curl -X POST http://127.0.0.1:8000/transcribe/ \
   -F "file=@audio.mp3" \
   -F "language=ru" \
+  -F "result_format=docx" \
   -F "save_file=true" \
   -F "save_result=true"
 ```

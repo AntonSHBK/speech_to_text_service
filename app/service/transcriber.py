@@ -1,3 +1,4 @@
+from re import A
 import uuid
 import tempfile
 import uuid
@@ -5,11 +6,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
-from docx import Document
-from docx.enum.text import WD_ALIGN_PARAGRAPH
-from docx.shared import Pt
-
 from app.settings import settings
+from app.utils.export import export_result, ExportFormat
 from app.models.transcriber import FastWhisperTranscriber
 
 
@@ -33,7 +31,7 @@ class TranscriberService:
         raw_bytes: bytes, 
         filename: str, 
         save_file: bool
-    ):
+    ) -> Path:
         original = Path(filename)
 
         stem = original.stem[:20]
@@ -49,39 +47,28 @@ class TranscriberService:
             path.write_bytes(raw_bytes)
             return path
 
-        tmp = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
+        tmp = tempfile.NamedTemporaryFile(
+            delete=False, 
+            suffix=suffix,
+            dir=settings.AUDIO_DIR
+        )
         tmp.write(raw_bytes)
         tmp.flush()
         return Path(tmp.name)
     
     async def export_result(
-        self, 
-        result: dict, 
-        source_filename: str
+        self,
+        result: dict,
+        source_filename: str,
+        format: ExportFormat = "docx"
     ) -> Path:
         stem = Path(source_filename).stem[:20]
-        uid = uuid.uuid4().hex
         timestamp = datetime.now().strftime("%d_%m_%Y_%H%M%S")
 
-        filename = f"{stem}_{timestamp}.docx"
+        filename = f"{stem}_{timestamp}.{format}"
         path = settings.TRANSCRIBE_RESULTS_DIR / filename
 
-        document = Document()
-
-        heading = document.add_heading("Результат транскрипции", level=1)
-        heading.alignment = WD_ALIGN_PARAGRAPH.CENTER
-
-        paragraph = document.add_paragraph(result.get("text", ""))
-
-        paragraph.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
-
-        p_format = paragraph.paragraph_format
-        p_format.line_spacing = 1.25
-        p_format.space_after = Pt(6)
-        p_format.space_before = Pt(6)
-
-        document.save(path)
-        return path
+        return export_result(result, path, format)
 
 
 transcriber_service = TranscriberService()

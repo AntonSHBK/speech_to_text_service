@@ -3,77 +3,102 @@
 <head>
   <meta charset="UTF-8">
   <title>ASR Interface</title>
-  <style>
-    body { font-family: sans-serif; margin: 40px; }
-    label { display: block; margin-top: 12px; }
-    button { margin-top: 20px; padding: 10px 20px; }
-    textarea { width: 100%; height: 150px; }
-  </style>
+  <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body>
 
-<h2>Транскрипция аудио</h2>
+<body class="bg-gray-100 min-h-screen flex items-center justify-center">
 
-<form id="form">
-  <label>
-    Аудиофайл:
-    <input type="file" name="file" required>
-  </label>
+<div class="bg-white shadow-xl rounded-2xl p-8 w-full max-w-2xl relative">
 
-  <label>
-    Язык:
-    <select name="language">
-      <option value="ru">ru</option>
-      <option value="en">en</option>
-      <option value="auto">auto</option>
-    </select>
-  </label>
+  <h1 class="text-2xl font-bold mb-6 text-center">🎙️ ASR Транскрипция</h1>
 
-  <label>
-    beam_size:
-    <input type="number" name="beam_size" value="1" min="1" max="10">
-  </label>
+  <!-- Loader -->
+  <div id="overlay"
+       class="hidden absolute inset-0 bg-white/80 flex flex-col items-center justify-center rounded-2xl z-10">
+    <div class="animate-spin rounded-full h-12 w-12 border-4 border-blue-500 border-t-transparent"></div>
+    <p class="mt-4 text-blue-600 font-medium">Идёт обработка…</p>
+  </div>
 
-  <label>
-    chunk_length:
-    <input type="number" name="chunk_length" value="20" min="5" max="60">
-  </label>
+  <form id="form" class="space-y-4">
 
-  <label>
-    save_file:
-    <select name="save_file">
-      <option value="false">false</option>
-      <option value="true">true</option>      
-    </select>
-  </label>
+    <div>
+      <label class="block text-sm font-medium mb-1">Аудиофайл</label>
+      <input type="file" name="file" required class="w-full border rounded-lg p-2">
+    </div>
 
-  <button type="submit">Транскрибировать</button>
+    <div class="grid grid-cols-2 gap-4">
+      <div>
+        <label class="block text-sm font-medium mb-1">Язык</label>
+        <select name="language" class="w-full border rounded-lg p-2">
+          <option value="ru">ru</option>
+          <option value="en">en</option>
+          <option value="auto">auto</option>
+        </select>
+      </div>
 
-  <button id="saveBtn" style="display:none;">Сохранить результат</button>
-</form>
+      <div>
+        <label class="block text-sm font-medium mb-1">Формат результата</label>
+        <select name="result_format" class="w-full border rounded-lg p-2">
+          <option value="docx">DOCX</option>
+          <option value="txt">TXT</option>
+          <option value="md">Markdown</option>
+        </select>
+      </div>
+    </div>
 
-<h3>Результат</h3>
+    <div class="grid grid-cols-2 gap-4">
+      <div>
+        <label class="block text-sm font-medium mb-1">Beam size</label>
+        <input type="number" name="beam_size" value="1" min="1" max="10"
+               class="w-full border rounded-lg p-2">
+      </div>
 
-<div id="loader" style="display:none;">
-  <p>Идёт обработка...</p>
+      <div>
+        <label class="block text-sm font-medium mb-1">Chunk length</label>
+        <input type="number" name="chunk_length" value="20" min="5" max="60"
+               class="w-full border rounded-lg p-2">
+      </div>
+    </div>
+
+    <button id="submitBtn"
+            class="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-xl font-semibold">
+      🚀 Транскрибировать
+    </button>
+
+  </form>
+
+  <div class="mt-6">
+    <label class="block text-sm font-medium mb-1">Результат</label>
+    <textarea id="output"
+              class="w-full h-40 border rounded-lg p-3"
+              placeholder="Здесь появится текст транскрипции..."></textarea>
+  </div>
+
+  <button id="downloadBtn"
+          class="hidden mt-4 w-full bg-green-600 hover:bg-green-700 text-white py-2 rounded-xl font-semibold">
+    💾 Сохранить результат
+  </button>
+
 </div>
-
-<textarea id="output"></textarea>
 
 <script>
 const form = document.getElementById("form");
-const loader = document.getElementById("loader");
+const overlay = document.getElementById("overlay");
 const output = document.getElementById("output");
-const saveBtn = document.getElementById("saveBtn");
+const submitBtn = document.getElementById("submitBtn");
+const downloadBtn = document.getElementById("downloadBtn");
 
-let lastText = "";
+let lastResultFile = null;
 
 form.onsubmit = async (e) => {
   e.preventDefault();
 
   output.value = "";
-  saveBtn.style.display = "none";
-  loader.style.display = "block";
+  lastResultFile = null;
+  downloadBtn.classList.add("hidden");
+
+  overlay.classList.remove("hidden");
+  submitBtn.disabled = true;
 
   const data = new FormData(form);
 
@@ -83,28 +108,41 @@ form.onsubmit = async (e) => {
       body: data
     });
 
+    if (!response.ok) throw new Error("Ошибка сервера");
+
     const result = await response.json();
 
-    lastText = result.text ?? "Пустой результат";
-    output.value = lastText;
+    output.value = result.text ?? "";
+    lastResultFile = result.result_file;
 
-    saveBtn.style.display = "inline-block";
+    if (lastResultFile) {
+      downloadBtn.classList.remove("hidden");
+    }
 
   } catch (err) {
-    output.value = "Ошибка при обработке запроса";
+    console.error(err);
+    output.value = "❌ Ошибка при обработке аудио";
   } finally {
-    loader.style.display = "none";
+    overlay.classList.add("hidden");
+    submitBtn.disabled = false;
   }
 };
 
-saveBtn.onclick = () => {
-  const blob = new Blob([lastText], { type: "text/plain" });
+downloadBtn.onclick = async () => {
+  if (!lastResultFile) return;
+
+  const fileResponse = await fetch(lastResultFile);
+  const blob = await fileResponse.blob();
+
   const url = URL.createObjectURL(blob);
+  const filename = lastResultFile.split("/").pop();
 
   const a = document.createElement("a");
   a.href = url;
-  a.download = "transcription.txt";
+  a.download = filename;
+  document.body.appendChild(a);
   a.click();
+  document.body.removeChild(a);
 
   URL.revokeObjectURL(url);
 };
