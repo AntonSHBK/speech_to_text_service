@@ -29,7 +29,7 @@ async def transcribe(
     multilingual: bool = Query(False, description="Поддержка нескольких языков"),
     result_format: ExportFormat = Query("docx", description="Формат экспортированного файла"),
     save_file: bool = Query(False, description="Сохранять ли исходный файл"),
-    save_result: bool = Query(False, description="Сохранять ли результат транскрипции"),
+    save_result: bool = Query(True, description="Сохранять ли результат транскрипции"),
 ):
     if not transcriber_service.is_ready():
         raise HTTPException(503, "Transcription service not ready")
@@ -65,37 +65,12 @@ async def transcribe(
         
         result["result_file"] = str(result_file)
 
-        # json_bytes = json.dumps(result, ensure_ascii=False).encode("utf-8")
-        # file_bytes = result_file.read_bytes()
-    
     finally:
         if not save_file and audio_source.exists():
             audio_source.unlink(missing_ok=True)
 
-        # if not save_result and 'result_file' in locals():
-        #     result_file.unlink(missing_ok=True)
+        if not save_result and 'result_file' in locals():
+            result_file.unlink(missing_ok=True)
 
-    # msg = MIMEMultipart("mixed")
-
-    # json_part = MIMEText(
-    #     _text=json_bytes.decode("utf-8"),
-    #     _subtype="json",
-    #     _charset="utf-8"
-    # )
-    # msg.attach(json_part)
-
-    # file_part = MIMEApplication(file_bytes)
-    # file_part.add_header(
-    #     "Content-Disposition",
-    #     "attachment",
-    #     filename=result_file.name
-    # )
-    # msg.attach(file_part)
-
-    # return Response(
-    #     content=msg.as_bytes(),
-    #     media_type=msg.get("Content-Type")
-    # )
-    
     return result
 
