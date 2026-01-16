@@ -1,12 +1,6 @@
 import json
 from pathlib import Path
 
-from email.mime.multipart import MIMEMultipart
-from email.mime.application import MIMEApplication
-from email.mime.text import MIMEText
-
-
-from fastapi.responses import Response
 from fastapi.concurrency import run_in_threadpool
 from fastapi import APIRouter, UploadFile, File, Query, HTTPException
 
