@@ -110,7 +110,7 @@
       });
 
       try {
-        const submitResponse = await fetch(`/transcribe/?${params.toString()}`, { method: "POST", body: data });
+        const submitResponse = await fetch(`/transcribe/file/?${params.toString()}`, { method: "POST", body: data });
         if (!submitResponse.ok) throw new Error("Ошибка отправки запроса");
         const queued = await submitResponse.json();
         if (!queued.status_url) throw new Error("Не получен статус задачи");
