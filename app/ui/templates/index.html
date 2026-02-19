@@ -5,148 +5,166 @@
   <title>ASR Interface</title>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
-
 <body class="bg-gray-100 min-h-screen flex items-center justify-center">
+  <div class="bg-white shadow-xl rounded-2xl p-8 w-full max-w-2xl relative">
+    <h1 class="text-2xl font-bold mb-6 text-center">ASR Транскрипция</h1>
 
-<div class="bg-white shadow-xl rounded-2xl p-8 w-full max-w-2xl relative">
-
-  <h1 class="text-2xl font-bold mb-6 text-center">🎙️ ASR Транскрипция</h1>
-
-  <!-- Loader -->
-  <div id="overlay"
-       class="hidden absolute inset-0 bg-white/80 flex flex-col items-center justify-center rounded-2xl z-10">
-    <div class="animate-spin rounded-full h-12 w-12 border-4 border-blue-500 border-t-transparent"></div>
-    <p class="mt-4 text-blue-600 font-medium">Идёт обработка…</p>
-  </div>
-
-  <form id="form" class="space-y-4">
-
-    <div>
-      <label class="block text-sm font-medium mb-1">Аудиофайл</label>
-      <input type="file" name="file" required class="w-full border rounded-lg p-2">
+    <div id="overlay" class="hidden absolute inset-0 bg-white/80 flex flex-col items-center justify-center rounded-2xl z-10">
+      <div class="animate-spin rounded-full h-12 w-12 border-4 border-blue-500 border-t-transparent"></div>
+      <p class="mt-4 text-blue-600 font-medium">Идет обработка...</p>
     </div>
 
-    <div class="grid grid-cols-2 gap-4">
+    <form id="form" class="space-y-4">
       <div>
-        <label class="block text-sm font-medium mb-1">Язык</label>
-        <select name="language" class="w-full border rounded-lg p-2">
-          <option value="ru">ru</option>
-          <option value="en">en</option>
-          <option value="auto">auto</option>
-        </select>
+        <label class="block text-sm font-medium mb-1">Аудиофайл</label>
+        <input type="file" name="file" required class="w-full border rounded-lg p-2">
       </div>
 
-      <div>
-        <label class="block text-sm font-medium mb-1">Формат результата</label>
-        <select name="result_format" class="w-full border rounded-lg p-2">
-          <option value="docx">DOCX</option>
-          <option value="txt">TXT</option>
-          <option value="md">Markdown</option>
-        </select>
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label class="block text-sm font-medium mb-1">Модель</label>
+          <select name="model" class="w-full border rounded-lg p-2">
+            <option value="small" selected>small</option>
+            <option value="medium">medium</option>
+            <option value="large">large</option>
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium mb-1">Язык</label>
+          <select name="language" class="w-full border rounded-lg p-2">
+            <option value="ru">ru</option>
+            <option value="en">en</option>
+            <option value="auto">auto</option>
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium mb-1">Формат результата</label>
+          <select name="result_format" class="w-full border rounded-lg p-2">
+            <option value="docx">DOCX</option>
+            <option value="txt">TXT</option>
+            <option value="md">Markdown</option>
+            <option value="pdf">PDF</option>
+          </select>
+        </div>
       </div>
+
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label class="block text-sm font-medium mb-1">Beam size</label>
+          <input type="number" name="beam_size" value="1" min="1" max="10" class="w-full border rounded-lg p-2">
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium mb-1">Chunk length</label>
+          <input type="number" name="chunk_length" value="20" min="5" max="60" class="w-full border rounded-lg p-2">
+        </div>
+      </div>
+
+      <button id="submitBtn" class="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-xl font-semibold">
+        Транскрибировать
+      </button>
+    </form>
+
+    <div class="mt-6">
+      <label class="block text-sm font-medium mb-1">Результат</label>
+      <textarea id="output" class="w-full h-40 border rounded-lg p-3" placeholder="Здесь появится текст транскрипции..."></textarea>
     </div>
 
-    <div class="grid grid-cols-2 gap-4">
-      <div>
-        <label class="block text-sm font-medium mb-1">Beam size</label>
-        <input type="number" name="beam_size" value="1" min="1" max="10"
-               class="w-full border rounded-lg p-2">
-      </div>
-
-      <div>
-        <label class="block text-sm font-medium mb-1">Chunk length</label>
-        <input type="number" name="chunk_length" value="20" min="5" max="60"
-               class="w-full border rounded-lg p-2">
-      </div>
-    </div>
-
-    <button id="submitBtn"
-            class="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-xl font-semibold">
-      🚀 Транскрибировать
+    <button id="downloadBtn" class="hidden mt-4 w-full bg-green-600 hover:bg-green-700 text-white py-2 rounded-xl font-semibold">
+      Сохранить результат
     </button>
-
-  </form>
-
-  <div class="mt-6">
-    <label class="block text-sm font-medium mb-1">Результат</label>
-    <textarea id="output"
-              class="w-full h-40 border rounded-lg p-3"
-              placeholder="Здесь появится текст транскрипции..."></textarea>
   </div>
 
-  <button id="downloadBtn"
-          class="hidden mt-4 w-full bg-green-600 hover:bg-green-700 text-white py-2 rounded-xl font-semibold">
-    💾 Сохранить результат
-  </button>
+  <script>
+    const form = document.getElementById("form");
+    const overlay = document.getElementById("overlay");
+    const output = document.getElementById("output");
+    const submitBtn = document.getElementById("submitBtn");
+    const downloadBtn = document.getElementById("downloadBtn");
 
-</div>
+    let lastResultFile = null;
+    const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-<script>
-const form = document.getElementById("form");
-const overlay = document.getElementById("overlay");
-const output = document.getElementById("output");
-const submitBtn = document.getElementById("submitBtn");
-const downloadBtn = document.getElementById("downloadBtn");
+    form.onsubmit = async (e) => {
+      e.preventDefault();
 
-let lastResultFile = null;
+      output.value = "";
+      lastResultFile = null;
+      downloadBtn.classList.add("hidden");
 
-form.onsubmit = async (e) => {
-  e.preventDefault();
+      overlay.classList.remove("hidden");
+      submitBtn.disabled = true;
 
-  output.value = "";
-  lastResultFile = null;
-  downloadBtn.classList.add("hidden");
+      const data = new FormData(form);
 
-  overlay.classList.remove("hidden");
-  submitBtn.disabled = true;
+      try {
+        const submitResponse = await fetch("/transcribe/", {
+          method: "POST",
+          body: data
+        });
 
-  const data = new FormData(form);
+        if (!submitResponse.ok) throw new Error("Ошибка отправки запроса");
+        const queued = await submitResponse.json();
 
-  try {
-    const response = await fetch("/transcribe", {
-      method: "POST",
-      body: data
-    });
+        if (!queued.status_url) throw new Error("Не получен статус задачи");
 
-    if (!response.ok) throw new Error("Ошибка сервера");
+        while (true) {
+          const statusResponse = await fetch(queued.status_url, { method: "GET" });
+          if (!statusResponse.ok) throw new Error("Ошибка проверки статуса");
 
-    const result = await response.json();
+          const statusData = await statusResponse.json();
+          const status = statusData.status;
 
-    output.value = result.text ?? "";
-    lastResultFile = result.result_file;
+          if (status === "done") {
+            const result = statusData.result || {};
+            output.value = result.text || "";
+            lastResultFile = result.result_file || null;
+            if (lastResultFile) downloadBtn.classList.remove("hidden");
+            break;
+          }
 
-    if (lastResultFile) {
-      downloadBtn.classList.remove("hidden");
-    }
+          if (status === "failed") {
+            output.value = `Ошибка: ${statusData.error || "unknown error"}`;
+            break;
+          }
 
-  } catch (err) {
-    console.error(err);
-    output.value = "❌ Ошибка при обработке аудио";
-  } finally {
-    overlay.classList.add("hidden");
-    submitBtn.disabled = false;
-  }
-};
+          output.value = `Статус: ${status}...`;
+          await sleep(1500);
+        }
+      } catch (err) {
+        console.error(err);
+        output.value = "Ошибка при обработке аудио";
+      } finally {
+        overlay.classList.add("hidden");
+        submitBtn.disabled = false;
+      }
+    };
 
-downloadBtn.onclick = async () => {
-  if (!lastResultFile) return;
+    downloadBtn.onclick = async () => {
+      if (!lastResultFile) return;
 
-  const fileResponse = await fetch(lastResultFile);
-  const blob = await fileResponse.blob();
+      try {
+        const fileResponse = await fetch(lastResultFile);
+        if (!fileResponse.ok) throw new Error("download failed");
+        const blob = await fileResponse.blob();
 
-  const url = URL.createObjectURL(blob);
-  const filename = lastResultFile.split("/").pop();
+        const url = URL.createObjectURL(blob);
+        const filename = lastResultFile.split("/").pop();
 
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
 
-  URL.revokeObjectURL(url);
-};
-</script>
-
+        URL.revokeObjectURL(url);
+      } catch (err) {
+        output.value = `Файл сохранен на сервере: ${lastResultFile}`;
+      }
+    };
+  </script>
 </body>
 </html>

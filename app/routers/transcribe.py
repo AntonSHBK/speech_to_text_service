@@ -1,70 +1,105 @@
-import json
 from pathlib import Path
 
-from fastapi.concurrency import run_in_threadpool
-from fastapi import APIRouter, UploadFile, File, Query, HTTPException
+from fastapi import APIRouter, File, Query, UploadFile
 
-from app.settings import settings
-from app.utils.export import ExportFormat
+from app.celery_app import celery_app
+from app.models.catalog import ModelSize
+from app.service.queue_tracker import enqueue_task, get_queue_position
 from app.service.transcriber import transcriber_service
+from app.tasks.transcribe import process_transcription
+from app.utils.export import ExportFormat
 
 router = APIRouter(tags=["Transcription"])
 
+
 @router.post("/transcribe/")
-async def transcribe(
+async def submit_transcription(
     file: UploadFile = File(...),
-    language: str = Query("ru", description="Язык транскрипции (например, 'ru', 'en')"),
-    task: str = Query("transcribe", description="Тип задачи ('transcribe' или 'translate')"),
-    beam_size: int = Query(1, ge=1, le=10, description="Размер beam search"),
-    chunk_length: int = Query(20, ge=5, le=60, description="Длина чанка в секундах"),
-    patience: float = Query(1.0, ge=0.0, description="Patience"),
-    length_penalty: float = Query(1.0, ge=0.0, description="Length penalty"),
-    repetition_penalty: float = Query(1.0, ge=0.0, description="Repetition penalty"),
-    multilingual: bool = Query(False, description="Поддержка нескольких языков"),
-    result_format: ExportFormat = Query("docx", description="Формат экспортированного файла"),
-    save_file: bool = Query(False, description="Сохранять ли исходный файл"),
-    save_result: bool = Query(True, description="Сохранять ли результат транскрипции"),
+    model: ModelSize = Query("small", description="Whisper model size: small, medium, large."),
+    language: str = Query("ru", description="Transcription language code, for example 'ru' or 'en'."),
+    task: str = Query("transcribe", description="Task type: 'transcribe' or 'translate'."),
+    beam_size: int = Query(1, ge=1, le=10, description="Beam search size."),
+    chunk_length: int = Query(20, ge=5, le=60, description="Chunk length in seconds."),
+    patience: float = Query(1.0, ge=0.0, description="Decoding patience."),
+    length_penalty: float = Query(1.0, ge=0.0, description="Length penalty."),
+    repetition_penalty: float = Query(1.0, ge=0.0, description="Repetition penalty."),
+    multilingual: bool = Query(False, description="Enable multilingual decoding."),
+    result_format: ExportFormat = Query("docx", description="Exported result file format."),
+    save_file: bool = Query(False, description="Keep uploaded source file."),
+    save_result: bool = Query(True, description="Keep exported result file."),
 ):
-    if not transcriber_service.is_ready():
-        raise HTTPException(503, "Transcription service not ready")
-
     raw_bytes = await file.read()
-    filename = Path(file.filename)
+    filename = Path(file.filename or "uploaded_file")
 
-    audio_source = await transcriber_service.prepare_audio(
+    audio_source = transcriber_service.prepare_audio(
         raw_bytes=raw_bytes,
         filename=filename,
-        save_file=save_file
+        save_file=True,
     )
 
-    try:    
-        result = await run_in_threadpool(
-            transcriber_service.get().transcribe,
-            audio_source,
-            language=language,
-            task=task,
-            beam_size=beam_size,
-            chunk_length=chunk_length,
-            patience=patience,
-            length_penalty=length_penalty,
-            repetition_penalty=repetition_penalty,
-            multilingual=multilingual
-        )
-        
-        result_file = await transcriber_service.export_result(
-            result=result, 
-            source_filename=filename, 
-            format=result_format
-        )
-        
-        result["result_file"] = str(result_file)
+    queued_task = process_transcription.delay(
+        audio_path=str(audio_source),
+        source_filename=filename.name,
+        model=model,
+        language=language,
+        task=task,
+        beam_size=beam_size,
+        chunk_length=chunk_length,
+        patience=patience,
+        length_penalty=length_penalty,
+        repetition_penalty=repetition_penalty,
+        multilingual=multilingual,
+        result_format=result_format,
+        save_result=save_result,
+        remove_source_after=not save_file,
+    )
+    queue_position = enqueue_task(queued_task.id)
 
-    finally:
-        if not save_file and audio_source.exists():
-            audio_source.unlink(missing_ok=True)
+    return {
+        "task_id": queued_task.id,
+        "status": "queued",
+        "queue_position": queue_position,
+        "status_url": f"/transcribe/tasks/{queued_task.id}",
+    }
 
-        if not save_result and 'result_file' in locals():
-            result_file.unlink(missing_ok=True)
 
-    return result
+@router.get("/transcribe/tasks/{task_id}")
+def get_transcription_status(task_id: str):
+    result = celery_app.AsyncResult(task_id)
+    meta = result.info if isinstance(result.info, dict) else {}
+    progress = meta.get("progress")
 
+    if result.state == "FAILURE":
+        return {
+            "task_id": task_id,
+            "status": "failed",
+            "queue_position": None,
+            "progress": progress,
+            "error": str(result.result),
+        }
+
+    if result.state == "SUCCESS":
+        return {
+            "task_id": task_id,
+            "status": "done",
+            "queue_position": None,
+            "progress": 100.0,
+            "result": result.result,
+        }
+
+    status_map = {
+        "PENDING": "queued",
+        "PROGRESS": "processing",
+        "STARTED": "processing",
+        "RETRY": "retrying",
+    }
+    status = status_map.get(result.state, result.state.lower())
+    queue_position = get_queue_position(task_id) if status == "queued" else None
+    if status == "queued" and progress is None:
+        progress = 0.0
+    return {
+        "task_id": task_id,
+        "status": status,
+        "queue_position": queue_position,
+        "progress": progress,
+    }

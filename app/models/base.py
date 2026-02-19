@@ -18,8 +18,9 @@ class BaseModel(ABC):
         
         self.cache_dir = Path(cache_dir)        
         self.cache_dir.mkdir(parents=True, exist_ok=True)
-        
-        self.logger = get_logger("model")
+
+        safe_model_name = self.model_name.replace("/", ".")
+        self.logger = get_logger(f"model.{safe_model_name}")
         
     @abstractmethod
     def load_model(self, model_name: str):

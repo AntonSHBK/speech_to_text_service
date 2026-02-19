@@ -1,5 +1,3 @@
-from re import A
-import uuid
 import tempfile
 import uuid
 from datetime import datetime
@@ -14,19 +12,41 @@ from app.models.transcriber import FastWhisperTranscriber
 class TranscriberService:
     def __init__(self):
         self.transcriber: Optional[FastWhisperTranscriber] = None
+        self.transcribers: dict[str, FastWhisperTranscriber] = {}
 
     def init(self, **kwargs):
-        self.transcriber = FastWhisperTranscriber(**kwargs)
+        model_name = kwargs["model_name"]
+        if model_name in self.transcribers:
+            self.transcriber = self.transcribers[model_name]
+            return self.transcriber
+
+        transcriber = FastWhisperTranscriber(**kwargs)
+        self.transcribers[model_name] = transcriber
+        self.transcriber = transcriber
+        return transcriber
 
     def is_ready(self) -> bool:
-        return self.transcriber is not None
+        return bool(self.transcribers)
 
-    def get(self) -> FastWhisperTranscriber:
-        if not self.transcriber:
-            raise RuntimeError("Transcriber is not initialized")
-        return self.transcriber
+    def get(self, model_name: str | None = None) -> FastWhisperTranscriber:
+        if model_name:
+            transcriber = self.transcribers.get(model_name)
+            if transcriber:
+                return transcriber
+
+        if self.transcriber:
+            return self.transcriber
+        raise RuntimeError("Transcriber is not initialized")
+
+    def get_or_init(self, **kwargs) -> FastWhisperTranscriber:
+        model_name = kwargs["model_name"]
+        cached = self.transcribers.get(model_name)
+        if cached:
+            self.transcriber = cached
+            return cached
+        return self.init(**kwargs)
     
-    async def prepare_audio(
+    def prepare_audio(
         self, 
         raw_bytes: bytes, 
         filename: str, 
@@ -56,7 +76,7 @@ class TranscriberService:
         tmp.flush()
         return Path(tmp.name)
     
-    async def export_result(
+    def export_result(
         self,
         result: dict,
         source_filename: str,

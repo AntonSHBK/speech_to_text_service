@@ -7,16 +7,54 @@ services:
       dockerfile: ./docker/Dockerfile
     volumes:
       - ../:/app/
-    # env_file:
-    #   - ./.env
+    env_file:
+      - ./.env
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
+    depends_on:
+      - redis
+    networks:
+      - service_network
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: ../
+      dockerfile: ./docker/Dockerfile
+    volumes:
+      - ../:/app/
+    command: celery -A app.celery_worker.celery_app worker --loglevel=info --concurrency=1
+    env_file:
+      - ./.env
+    depends_on:
+      - redis
+    networks:
+      - service_network
+    restart: unless-stopped
+
+  flower:
+    build:
+      context: ../
+      dockerfile: ./docker/Dockerfile
+    command: celery -A app.celery_worker.celery_app flower --port=5555 --basic_auth=${FLOWER_BASIC_AUTH}
+    env_file:
+      - ./.env
+    depends_on:
+      - redis
+      - worker
+    ports:
+      - "127.0.0.1:5555:5555"
+    networks:
+      - service_network
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
     networks:
       - service_network
     restart: unless-stopped
 
 networks:
   service_network:
-    external: true
-    name: shared_net
-
+    driver: bridge
+    name: speech_private_net
