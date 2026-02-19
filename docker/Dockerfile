@@ -9,7 +9,8 @@ RUN set -eux; \
     apt-get install -y --no-install-recommends \
         ffmpeg \
         build-essential \
-        ca-certificates; \
+        ca-certificates \
+        fonts-dejavu-core; \
     rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
