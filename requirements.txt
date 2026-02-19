@@ -1,8 +1,8 @@
 # FastAPI и сервер Uvicorn
-fastapi==0.110.0
+fastapi==0.128.0
 uvicorn==0.27.1
-pydantic==2.9.1
-pydantic-settings==2.8.1
+pydantic==2.12.5
+pydantic-settings==2.12.0
 celery==5.4.0
 redis==5.0.8
 flower==2.0.1

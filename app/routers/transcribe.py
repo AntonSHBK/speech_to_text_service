@@ -1,11 +1,13 @@
 from pathlib import Path
 
-from fastapi import APIRouter, File, Query, UploadFile
+from fastapi import APIRouter, File, HTTPException, Query, UploadFile
+from fastapi.responses import FileResponse
 
 from app.celery_app import celery_app
 from app.models.catalog import ModelSize
 from app.service.queue_tracker import enqueue_task, get_queue_position
 from app.service.transcriber import transcriber_service
+from app.settings import settings
 from app.tasks.transcribe import process_transcription
 from app.utils.export import ExportFormat
 
@@ -103,3 +105,12 @@ def get_transcription_status(task_id: str):
         "queue_position": queue_position,
         "progress": progress,
     }
+
+
+@router.get("/transcribe/files/{filename}")
+def download_transcription_file(filename: str):
+    safe_name = Path(filename).name
+    file_path = settings.TRANSCRIBE_RESULTS_DIR / safe_name
+    if not file_path.exists() or not file_path.is_file():
+        raise HTTPException(status_code=404, detail="File not found")
+    return FileResponse(path=file_path, filename=safe_name)

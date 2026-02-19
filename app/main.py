@@ -9,10 +9,10 @@ async def lifespan(app: FastAPI):
     yield
 
 app = FastAPI(lifespan=lifespan, title="Speech-to-Text API")
+app.include_router(router)
 
 @app.get("/")
 def health_check():
     """Простой эндпоинт для проверки работоспособности API."""
     return {"status": "API is running"}
 
-app.include_router(router)

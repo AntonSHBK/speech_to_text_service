@@ -55,7 +55,6 @@
           <label class="block text-sm font-medium mb-1">Beam size</label>
           <input type="number" name="beam_size" value="1" min="1" max="10" class="w-full border rounded-lg p-2">
         </div>
-
         <div>
           <label class="block text-sm font-medium mb-1">Chunk length</label>
           <input type="number" name="chunk_length" value="20" min="5" max="60" class="w-full border rounded-lg p-2">
@@ -85,29 +84,32 @@
     const downloadBtn = document.getElementById("downloadBtn");
 
     let lastResultFile = null;
+    let lastDownloadUrl = null;
     const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
     form.onsubmit = async (e) => {
       e.preventDefault();
-
       output.value = "";
       lastResultFile = null;
+      lastDownloadUrl = null;
       downloadBtn.classList.add("hidden");
-
       overlay.classList.remove("hidden");
       submitBtn.disabled = true;
 
-      const data = new FormData(form);
+      const data = new FormData();
+      data.append("file", form.file.files[0]);
+      const params = new URLSearchParams({
+        model: form.model.value,
+        language: form.language.value,
+        beam_size: form.beam_size.value,
+        chunk_length: form.chunk_length.value,
+        result_format: form.result_format.value
+      });
 
       try {
-        const submitResponse = await fetch("/transcribe/", {
-          method: "POST",
-          body: data
-        });
-
+        const submitResponse = await fetch(`/transcribe/?${params.toString()}`, { method: "POST", body: data });
         if (!submitResponse.ok) throw new Error("Ошибка отправки запроса");
         const queued = await submitResponse.json();
-
         if (!queued.status_url) throw new Error("Не получен статус задачи");
 
         while (true) {
@@ -121,7 +123,11 @@
             const result = statusData.result || {};
             output.value = result.text || "";
             lastResultFile = result.result_file || null;
-            if (lastResultFile) downloadBtn.classList.remove("hidden");
+            if (lastResultFile) {
+              const fileName = lastResultFile.split("/").pop();
+              lastDownloadUrl = `/transcribe/files/${encodeURIComponent(fileName)}`;
+              downloadBtn.classList.remove("hidden");
+            }
             break;
           }
 
@@ -143,10 +149,10 @@
     };
 
     downloadBtn.onclick = async () => {
-      if (!lastResultFile) return;
+      if (!lastResultFile || !lastDownloadUrl) return;
 
       try {
-        const fileResponse = await fetch(lastResultFile);
+        const fileResponse = await fetch(lastDownloadUrl);
         if (!fileResponse.ok) throw new Error("download failed");
         const blob = await fileResponse.blob();
 
@@ -159,7 +165,6 @@
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
-
         URL.revokeObjectURL(url);
       } catch (err) {
         output.value = `Файл сохранен на сервере: ${lastResultFile}`;

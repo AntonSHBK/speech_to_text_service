@@ -15,7 +15,7 @@ class Settings(BaseSettings):
     
     DEVICE: str = Field(default="cuda" if torch.cuda.is_available() else "cpu")
 
-    MODEL_NAME: str = Field(default="Systran/faster-whisper-small")
+    # MODEL_NAME: str = Field(default="Systran/faster-whisper-small")
     BASE_DIR: Path = BASE_DIR
     DATA_DIR: Path = BASE_DIR / "data"
     AUDIO_DIR: Path = BASE_DIR / "data" / "audio"
