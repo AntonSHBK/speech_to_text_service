@@ -6,7 +6,8 @@ The service provides high-quality transcription for audio and video files with s
 ## What Changed
 
 - Transcription is now asynchronous (queue-based).
-- `POST /transcribe/` creates a task and returns `task_id`.
+- `POST /transcribe/file/` creates a task from uploaded file and returns `task_id`.
+- `POST /transcribe/url/` creates a task from source URL (YouTube/Rutube/etc.) and returns `task_id`.
 - Result is fetched via `GET /transcribe/tasks/{task_id}`.
 - Queue status includes:
   - `status` (`queued`, `processing`, `retrying`, `done`, `failed`)
@@ -70,10 +71,10 @@ Response:
 { "status": "API is running" }
 ```
 
-### 2) Submit transcription task
+### 2) Submit transcription task from file
 
 ```http
-POST /transcribe/
+POST /transcribe/file/
 ```
 
 #### Parameters
@@ -97,7 +98,7 @@ POST /transcribe/
 Example:
 
 ```bash
-curl -X POST "http://127.0.0.1:8000/transcribe/?model=medium&language=ru&result_format=pdf" \
+curl -X POST "http://127.0.0.1:8000/transcribe/file/?model=medium&language=ru&result_format=pdf" \
   -F "file=@audio.mp3"
 ```
 
@@ -112,7 +113,39 @@ Response:
 }
 ```
 
-### 3) Get task status/result
+### 3) Submit transcription task from URL
+
+```http
+POST /transcribe/url/
+```
+
+#### Parameters
+
+| Name | Type | Description |
+| --- | --- | --- |
+| `source_url` | string | Public media URL |
+| `model` | string | `small` / `medium` / `large` |
+| `language` | string | Language code (`ru`, `en`, `auto`, ...) |
+| `task` | string | `transcribe` or `translate` |
+| `beam_size` | int | 1..10 |
+| `chunk_length` | int | 5..60 seconds |
+| `patience` | float | Decoder patience |
+| `length_penalty` | float | Length penalty |
+| `repetition_penalty` | float | Repetition penalty |
+| `multilingual` | bool | Enable multilingual mode |
+| `result_format` | string | `docx` / `txt` / `md` / `pdf` |
+| `save_file` | bool | Keep downloaded source file |
+| `save_result` | bool | Keep result file |
+
+Example:
+
+```bash
+curl -X POST "http://127.0.0.1:8000/transcribe/url/?source_url=https://www.youtube.com/watch?v=VIDEO_ID&model=small&result_format=pdf"
+```
+
+Response is the same queue object as for `/transcribe/file/`.
+
+### 4) Get task status/result
 
 ```http
 GET /transcribe/tasks/{task_id}
@@ -172,6 +205,18 @@ Failed:
   "progress": 12.5,
   "error": "error message"
 }
+```
+
+### 5) Download exported file
+
+```http
+GET /transcribe/files/{filename}
+```
+
+Example:
+
+```bash
+curl -OJ "http://127.0.0.1:8000/transcribe/files/audio_19_02_2026_103000.pdf"
 ```
 
 ## Queue Position Note
