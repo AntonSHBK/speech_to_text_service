@@ -32,6 +32,8 @@ class Settings(BaseSettings):
     
     CELERY_BROKER_URL: str = "redis://localhost:6379/0"
     CELERY_RESULT_BACKEND: str = "redis://localhost:6379/0"
+    YTDLP_SOCKET_TIMEOUT_SEC: int = 180
+    YTDLP_MAX_DURATION_SEC: int = 10800
 
     model_config = SettingsConfigDict(
         env_file=BASE_DIR / ".env",

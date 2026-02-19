@@ -1,4 +1,5 @@
 from pathlib import Path
+from urllib.parse import urlparse
 
 from fastapi.concurrency import run_in_threadpool
 from fastapi import APIRouter, File, HTTPException, Query, UploadFile
@@ -59,15 +60,32 @@ def _enqueue_transcription_task(
 
 
 def _download_source(url: str) -> Path:
+    parsed = urlparse(url)
+    if parsed.scheme not in ("http", "https"):
+        raise RuntimeError("source_url must use http or https scheme")
+
     ydl_opts = {
         "format": "bestaudio[ext=m4a]/bestaudio/best",
         "noplaylist": True,
         "quiet": True,
         "no_warnings": True,
         "restrictfilenames": True,
+        "socket_timeout": settings.YTDLP_SOCKET_TIMEOUT_SEC,
         "outtmpl": str(settings.AUDIO_DIR / "%(title).120s_%(id)s.%(ext)s"),
     }
     with YoutubeDL(ydl_opts) as ydl:
+        metadata = ydl.extract_info(url, download=False)
+        if not metadata:
+            raise RuntimeError("Failed to fetch source metadata")
+        if "entries" in metadata and metadata["entries"]:
+            metadata = metadata["entries"][0]
+
+        duration = metadata.get("duration")
+        if duration and duration > settings.YTDLP_MAX_DURATION_SEC:
+            raise RuntimeError(
+                f"Source duration exceeds limit: {int(duration)}s > {settings.YTDLP_MAX_DURATION_SEC}s"
+            )
+
         info = ydl.extract_info(url, download=True)
         if not info:
             raise RuntimeError("Failed to resolve media from URL")
@@ -93,11 +111,11 @@ async def submit_transcription_file(
     model: ModelSize = Query("small", description="Whisper model size: small, medium, large."),
     language: str = Query("ru", description="Transcription language code, for example 'ru' or 'en'."),
     task: str = Query("transcribe", description="Task type: 'transcribe' or 'translate'."),
-    beam_size: int = Query(1, ge=1, le=10, description="Beam search size."),
+    beam_size: int = Query(3, ge=1, le=10, description="Beam search size."),
     chunk_length: int = Query(20, ge=5, le=60, description="Chunk length in seconds."),
     patience: float = Query(1.0, ge=0.0, description="Decoding patience."),
     length_penalty: float = Query(1.0, ge=0.0, description="Length penalty."),
-    repetition_penalty: float = Query(1.0, ge=0.0, description="Repetition penalty."),
+    repetition_penalty: float = Query(1.5, ge=0.0, description="Repetition penalty."),
     multilingual: bool = Query(False, description="Enable multilingual decoding."),
     result_format: ExportFormat = Query("docx", description="Exported result file format."),
     save_file: bool = Query(False, description="Keep uploaded source file."),
@@ -130,11 +148,11 @@ async def submit_transcription_url(
     model: ModelSize = Query("small", description="Whisper model size: small, medium, large."),
     language: str = Query("ru", description="Transcription language code, for example 'ru' or 'en'."),
     task: str = Query("transcribe", description="Task type: 'transcribe' or 'translate'."),
-    beam_size: int = Query(1, ge=1, le=10, description="Beam search size."),
+    beam_size: int = Query(3, ge=1, le=10, description="Beam search size."),
     chunk_length: int = Query(20, ge=5, le=60, description="Chunk length in seconds."),
     patience: float = Query(1.0, ge=0.0, description="Decoding patience."),
     length_penalty: float = Query(1.0, ge=0.0, description="Length penalty."),
-    repetition_penalty: float = Query(1.0, ge=0.0, description="Repetition penalty."),
+    repetition_penalty: float = Query(1.5, ge=0.0, description="Repetition penalty."),
     multilingual: bool = Query(False, description="Enable multilingual decoding."),
     result_format: ExportFormat = Query("docx", description="Exported result file format."),
     save_file: bool = Query(False, description="Keep downloaded source file."),
