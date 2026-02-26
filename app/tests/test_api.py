@@ -38,7 +38,7 @@ def test_transcription_flow(client: TestClient):
             files={"file": ("test_video_3.mp4", f, "video/mp4")},
             params={
                 "language": "ru",
-                "save_file": True,
+                "save_source": True,
                 "save_result": True,
             },
         )
