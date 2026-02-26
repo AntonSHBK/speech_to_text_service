@@ -30,7 +30,7 @@ def _enqueue_transcription_task(
     repetition_penalty: float = Query(1.0, ge=0.0, description="Repetition penalty."),
     multilingual: bool = Query(False, description="Enable multilingual decoding."),
     result_format: ExportFormat = Query("docx", description="Exported result file format."),
-    save_file: bool = Query(False, description="Keep uploaded source file."),
+    save_source: bool = Query(False, description="Keep source file."),
     save_result: bool = Query(True, description="Keep exported result file."),
 ) -> dict:
     queued_task = process_transcription.delay(
@@ -46,8 +46,8 @@ def _enqueue_transcription_task(
         repetition_penalty=repetition_penalty,
         multilingual=multilingual,
         result_format=result_format,
+        save_source=save_source,
         save_result=save_result,
-        remove_source_after=not save_file,
     )
     queue_position = enqueue_task(queued_task.id)
 
@@ -118,12 +118,12 @@ async def submit_transcription_file(
     repetition_penalty: float = Query(1.5, ge=0.0, description="Repetition penalty."),
     multilingual: bool = Query(False, description="Enable multilingual decoding."),
     result_format: ExportFormat = Query("docx", description="Exported result file format."),
-    save_file: bool = Query(False, description="Keep uploaded source file."),
+    save_source: bool = Query(False, description="Keep uploaded source file."),
     save_result: bool = Query(True, description="Keep exported result file."),
 ):
     raw_bytes = await file.read()
     filename = Path(file.filename or "uploaded_file")
-    audio_source = transcriber_service.prepare_audio(raw_bytes=raw_bytes, filename=filename, save_file=True)
+    audio_source = transcriber_service.prepare_audio(raw_bytes=raw_bytes, filename=filename, save_source=save_source)
     return _enqueue_transcription_task(
         audio_source=audio_source,
         source_filename=filename.name,
@@ -137,7 +137,7 @@ async def submit_transcription_file(
         repetition_penalty=repetition_penalty,
         multilingual=multilingual,
         result_format=result_format,
-        save_file=save_file,
+        save_source=save_source,
         save_result=save_result,
     )
 
@@ -155,7 +155,7 @@ async def submit_transcription_url(
     repetition_penalty: float = Query(1.5, ge=0.0, description="Repetition penalty."),
     multilingual: bool = Query(False, description="Enable multilingual decoding."),
     result_format: ExportFormat = Query("docx", description="Exported result file format."),
-    save_file: bool = Query(False, description="Keep downloaded source file."),
+    save_source: bool = Query(False, description="Keep downloaded source file."),
     save_result: bool = Query(True, description="Keep exported result file."),
 ):
     try:
@@ -176,7 +176,7 @@ async def submit_transcription_url(
         repetition_penalty=repetition_penalty,
         multilingual=multilingual,
         result_format=result_format,
-        save_file=save_file,
+        save_source=save_source,
         save_result=save_result,
     )
 

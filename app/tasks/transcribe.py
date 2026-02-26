@@ -47,8 +47,8 @@ def process_transcription(
     repetition_penalty: float = 1.0,
     multilingual: bool = False,
     result_format: ExportFormat = "docx",
+    save_source: bool = False,
     save_result: bool = True,
-    remove_source_after: bool = False,
 ) -> dict:
     input_path = Path(audio_path)
     result_file = None
@@ -83,19 +83,17 @@ def process_transcription(
             ),
         )
 
-        result_file = transcriber_service.export_result(
-            result=result,
-            source_filename=source_filename,
-            format=result_format,
-        )
-
-        result["result_file"] = str(result_file)
-
-        if not save_result and result_file:
-            result_file.unlink(missing_ok=True)
+        if save_result:
+            result_file = transcriber_service.export_result(
+                result=result,
+                source_filename=source_filename,
+                format=result_format,
+            )
+            result["result_file"] = str(result_file)
+        else:
             result["result_file"] = None
 
         return result
     finally:
-        if remove_source_after and input_path.exists():
+        if not save_source and input_path.exists():
             input_path.unlink(missing_ok=True)

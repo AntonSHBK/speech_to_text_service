@@ -92,7 +92,7 @@ POST /transcribe/file/
 | `repetition_penalty` | float | Repetition penalty |
 | `multilingual` | bool | Enable multilingual mode |
 | `result_format` | string | `docx` / `txt` / `md` / `pdf` |
-| `save_file` | bool | Keep uploaded source file |
+| `save_source` | bool | Keep uploaded source file |
 | `save_result` | bool | Keep result file |
 
 Example:
@@ -134,7 +134,7 @@ POST /transcribe/url/
 | `repetition_penalty` | float | Repetition penalty |
 | `multilingual` | bool | Enable multilingual mode |
 | `result_format` | string | `docx` / `txt` / `md` / `pdf` |
-| `save_file` | bool | Keep downloaded source file |
+| `save_source` | bool | Keep downloaded source file |
 | `save_result` | bool | Keep result file |
 
 Example:
