@@ -15,4 +15,3 @@ app.include_router(router)
 def health_check():
     """Простой эндпоинт для проверки работоспособности API."""
     return {"status": "API is running"}
-

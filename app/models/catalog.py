@@ -4,8 +4,8 @@ ModelSize = Literal["small", "medium", "large"]
 
 MODEL_CATALOG: dict[ModelSize, str] = {
     "small": "Systran/faster-whisper-small",
-    "medium": "Systran/faster-whisper-medium",
-    "large": "Systran/faster-whisper-large-v3",
+    # "medium": "Systran/faster-whisper-medium",
+    # "large": "Systran/faster-whisper-large-v3",
 }
 
 

@@ -15,7 +15,6 @@ class Settings(BaseSettings):
     
     DEVICE: str = Field(default="cuda" if torch.cuda.is_available() else "cpu")
 
-    # MODEL_NAME: str = Field(default="Systran/faster-whisper-small")
     BASE_DIR: Path = BASE_DIR
     DATA_DIR: Path = BASE_DIR / "data"
     AUDIO_DIR: Path = BASE_DIR / "data" / "audio"
@@ -34,6 +33,7 @@ class Settings(BaseSettings):
     CELERY_RESULT_BACKEND: str = "redis://localhost:6379/0"
     YTDLP_SOCKET_TIMEOUT_SEC: int = 180
     YTDLP_MAX_DURATION_SEC: int = 10800
+    HF_TOKEN: str | None = None
 
     model_config = SettingsConfigDict(
         env_file=BASE_DIR / ".env",

@@ -22,16 +22,6 @@ def init_transcriber_worker(**kwargs):
             cpu_threads=settings.MODEL_CPU_THREADS,
             num_workers=settings.MODEL_NUM_WORKERS,
         )
-    # default_model_name = resolve_model_name("small")
-    # transcriber_service.init(
-    #     model_name=default_model_name,
-    #     device=settings.DEVICE,
-    #     cache_dir=settings.CACHE_DIR,
-    #     token=None,
-    #     compute_type="default",
-    #     cpu_threads=settings.MODEL_CPU_THREADS,
-    #     num_workers=settings.MODEL_NUM_WORKERS,
-    # )
 
 @celery_app.task(name="transcribe.process")
 def process_transcription(
