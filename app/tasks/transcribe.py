@@ -15,25 +15,26 @@ logger = get_logger("worker.init")
 
 @worker_process_init.connect
 def init_transcriber_worker(**kwargs):
-    for model_name in MODEL_CATALOG.values():
-        logger.info("Начинается инициализация модели: %s", model_name)
-        transcriber_service.init(
-            model_name=model_name,
-            device=settings.DEVICE,
-            cache_dir=settings.CACHE_DIR,
-            token=None,
-            compute_type="default",
-            cpu_threads=settings.MODEL_CPU_THREADS,
-            num_workers=settings.MODEL_NUM_WORKERS,
-        )
-        logger.info("Инициализация модели завершена: %s", model_name)
-    logger.info("Предзагрузка моделей воркера завершена. Загружено: %d.", len(MODEL_CATALOG))
+    default_model_key: ModelSize = "medium"
+    default_model_name = resolve_model_name(default_model_key)
+    logger.info("Начинается инициализация модели по умолчанию: %s", default_model_name)
+    transcriber_service.init(
+        model_name=default_model_name,
+        device=settings.DEVICE,
+        cache_dir=settings.CACHE_DIR,
+        token=None,
+        compute_type="default",
+        cpu_threads=settings.MODEL_CPU_THREADS,
+        num_workers=settings.MODEL_NUM_WORKERS,
+    )
+    logger.info("Инициализация модели по умолчанию завершена: %s", default_model_name)
+    logger.info("Другие модели будут загружаться по требованию задачи.")
 
 @celery_app.task(name="transcribe.process")
 def process_transcription(
     audio_path: str,
     source_filename: str,
-    model: ModelSize = "small",
+    model: ModelSize = "medium",
     language: str = "ru",
     task: str = "transcribe",
     beam_size: int = 1,

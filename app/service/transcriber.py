@@ -1,5 +1,6 @@
 import tempfile
 import uuid
+import gc
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
@@ -12,27 +13,28 @@ from app.models.transcriber import FastWhisperTranscriber
 class TranscriberService:
     def __init__(self):
         self.transcriber: Optional[FastWhisperTranscriber] = None
-        self.transcribers: dict[str, FastWhisperTranscriber] = {}
+        self.current_model_name: str | None = None
 
     def init(self, **kwargs):
         model_name = kwargs["model_name"]
-        if model_name in self.transcribers:
-            self.transcriber = self.transcribers[model_name]
+        if self.transcriber and self.current_model_name == model_name:
             return self.transcriber
 
+        if self.transcriber is not None:
+            self.transcriber = None
+            gc.collect()
+
         transcriber = FastWhisperTranscriber(**kwargs)
-        self.transcribers[model_name] = transcriber
         self.transcriber = transcriber
+        self.current_model_name = model_name
         return transcriber
 
     def is_ready(self) -> bool:
-        return bool(self.transcribers)
+        return self.transcriber is not None
 
     def get(self, model_name: str | None = None) -> FastWhisperTranscriber:
-        if model_name:
-            transcriber = self.transcribers.get(model_name)
-            if transcriber:
-                return transcriber
+        if model_name and self.current_model_name == model_name and self.transcriber:
+            return self.transcriber
 
         if self.transcriber:
             return self.transcriber
@@ -40,10 +42,8 @@ class TranscriberService:
 
     def get_or_init(self, **kwargs) -> FastWhisperTranscriber:
         model_name = kwargs["model_name"]
-        cached = self.transcribers.get(model_name)
-        if cached:
-            self.transcriber = cached
-            return cached
+        if self.transcriber and self.current_model_name == model_name:
+            return self.transcriber
         return self.init(**kwargs)
     
     def prepare_audio(

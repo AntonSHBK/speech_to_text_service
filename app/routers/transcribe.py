@@ -20,7 +20,7 @@ router = APIRouter(tags=["Транскрибация"])
 def _enqueue_transcription_task(
     audio_source: Path,
     source_filename: str,
-    model: ModelSize = Query("small", description="Размер модели Whisper: small, medium, large."),
+    model: ModelSize = Query("medium", description="Размер модели Whisper: small, medium, large."),
     language: str = Query("ru", description="Код языка транскрибации, например 'ru' или 'en'."),
     task: str = Query("transcribe", description="Тип задачи: 'transcribe' или 'translate'."),
     beam_size: int = Query(1, ge=1, le=10, description="Размер beam search."),
@@ -108,7 +108,7 @@ def _download_source(url: str) -> Path:
 @router.post("/transcribe/file/")
 async def submit_transcription_file(
     file: UploadFile = File(...),
-    model: ModelSize = Query("small", description="Размер модели Whisper: small, medium, large."),
+    model: ModelSize = Query("medium", description="Размер модели Whisper: small, medium, large."),
     language: str = Query("ru", description="Код языка транскрибации, например 'ru' или 'en'."),
     task: str = Query("transcribe", description="Тип задачи: 'transcribe' или 'translate'."),
     beam_size: int = Query(3, ge=1, le=10, description="Размер beam search."),
@@ -145,7 +145,7 @@ async def submit_transcription_file(
 @router.post("/transcribe/url/")
 async def submit_transcription_url(
     source_url: str = Query(..., description="Публичный URL медиа (YouTube, Rutube и т.д.)."),
-    model: ModelSize = Query("small", description="Размер модели Whisper: small, medium, large."),
+    model: ModelSize = Query("medium", description="Размер модели Whisper: small, medium, large."),
     language: str = Query("ru", description="Код языка транскрибации, например 'ru' или 'en'."),
     task: str = Query("transcribe", description="Тип задачи: 'transcribe' или 'translate'."),
     beam_size: int = Query(3, ge=1, le=10, description="Размер beam search."),
