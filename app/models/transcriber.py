@@ -45,7 +45,7 @@ class FastWhisperTranscriber(BaseModel):
             cpu_threads=cpu_threads,
             num_workers=num_workers,
         )
-        self.logger.info("Model loaded: %s", model_name)
+        self.logger.info("Модель загружена: %s", model_name)
         return model
 
     def process(self, audio_path: Union[str, Path]) -> Path:
@@ -67,7 +67,7 @@ class FastWhisperTranscriber(BaseModel):
     ) -> dict:
         audio_path = self.process(audio_path)
         self.logger.info(
-            "Transcription started | model=%s | file=%s | language=%s | task=%s",
+            "Транскрибация начата | модель=%s | файл=%s | язык=%s | задача=%s",
             self.model_name,
             audio_path,
             language,
@@ -102,7 +102,7 @@ class FastWhisperTranscriber(BaseModel):
                 if int(progress) >= last_logged + 2:
                     last_logged = int(progress)
                     self.logger.info(
-                        "Progress | model=%s | file=%s | value=%.1f%%",
+                        "Прогресс | модель=%s | файл=%s | значение=%.1f%%",
                         self.model_name,
                         audio_path,
                         progress,
@@ -114,7 +114,7 @@ class FastWhisperTranscriber(BaseModel):
         speed_ratio = duration / processing_time if processing_time > 0 else 0.0
 
         self.logger.info(
-            "Transcription finished | model=%s | file=%s | duration=%.2fs | processing=%.2fs | speed=x%.2f",
+            "Транскрибация завершена | модель=%s | файл=%s | длительность=%.2fс | обработка=%.2fс | скорость=x%.2f",
             self.model_name,
             audio_path,
             duration,

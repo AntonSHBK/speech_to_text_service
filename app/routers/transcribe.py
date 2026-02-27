@@ -14,24 +14,24 @@ from app.settings import settings
 from app.tasks.transcribe import process_transcription
 from app.utils.export import ExportFormat
 
-router = APIRouter(tags=["Transcription"])
+router = APIRouter(tags=["Транскрибация"])
 
 
 def _enqueue_transcription_task(
     audio_source: Path,
     source_filename: str,
-    model: ModelSize = Query("small", description="Whisper model size: small, medium, large."),
-    language: str = Query("ru", description="Transcription language code, for example 'ru' or 'en'."),
-    task: str = Query("transcribe", description="Task type: 'transcribe' or 'translate'."),
-    beam_size: int = Query(1, ge=1, le=10, description="Beam search size."),
-    chunk_length: int = Query(20, ge=5, le=60, description="Chunk length in seconds."),
-    patience: float = Query(1.0, ge=0.0, description="Decoding patience."),
-    length_penalty: float = Query(1.0, ge=0.0, description="Length penalty."),
-    repetition_penalty: float = Query(1.0, ge=0.0, description="Repetition penalty."),
-    multilingual: bool = Query(False, description="Enable multilingual decoding."),
-    result_format: ExportFormat = Query("docx", description="Exported result file format."),
-    save_source: bool = Query(False, description="Keep source file."),
-    save_result: bool = Query(True, description="Keep exported result file."),
+    model: ModelSize = Query("small", description="Размер модели Whisper: small, medium, large."),
+    language: str = Query("ru", description="Код языка транскрибации, например 'ru' или 'en'."),
+    task: str = Query("transcribe", description="Тип задачи: 'transcribe' или 'translate'."),
+    beam_size: int = Query(1, ge=1, le=10, description="Размер beam search."),
+    chunk_length: int = Query(20, ge=5, le=60, description="Длина чанка в секундах."),
+    patience: float = Query(1.0, ge=0.0, description="Параметр терпения декодирования."),
+    length_penalty: float = Query(1.0, ge=0.0, description="Штраф за длину."),
+    repetition_penalty: float = Query(1.0, ge=0.0, description="Штраф за повторы."),
+    multilingual: bool = Query(False, description="Включить многоязычное декодирование."),
+    result_format: ExportFormat = Query("docx", description="Формат экспортируемого файла результата."),
+    save_source: bool = Query(False, description="Сохранить исходный файл."),
+    save_result: bool = Query(True, description="Сохранить экспортированный файл результата."),
 ) -> dict:
     queued_task = process_transcription.delay(
         audio_path=str(audio_source),
@@ -62,7 +62,7 @@ def _enqueue_transcription_task(
 def _download_source(url: str) -> Path:
     parsed = urlparse(url)
     if parsed.scheme not in ("http", "https"):
-        raise RuntimeError("source_url must use http or https scheme")
+        raise RuntimeError("source_url должен использовать схему http или https")
 
     ydl_opts = {
         "format": "bestaudio[ext=m4a]/bestaudio/best",
@@ -76,19 +76,19 @@ def _download_source(url: str) -> Path:
     with YoutubeDL(ydl_opts) as ydl:
         metadata = ydl.extract_info(url, download=False)
         if not metadata:
-            raise RuntimeError("Failed to fetch source metadata")
+            raise RuntimeError("Не удалось получить метаданные источника")
         if "entries" in metadata and metadata["entries"]:
             metadata = metadata["entries"][0]
 
         duration = metadata.get("duration")
         if duration and duration > settings.YTDLP_MAX_DURATION_SEC:
             raise RuntimeError(
-                f"Source duration exceeds limit: {int(duration)}s > {settings.YTDLP_MAX_DURATION_SEC}s"
+                f"Длительность источника превышает лимит: {int(duration)}с > {settings.YTDLP_MAX_DURATION_SEC}с"
             )
 
         info = ydl.extract_info(url, download=True)
         if not info:
-            raise RuntimeError("Failed to resolve media from URL")
+            raise RuntimeError("Не удалось получить медиа по URL")
 
         if "entries" in info and info["entries"]:
             info = info["entries"][0]
@@ -101,25 +101,25 @@ def _download_source(url: str) -> Path:
 
     path = Path(filepath)
     if not path.exists():
-        raise RuntimeError("Downloaded file not found")
+        raise RuntimeError("Скачанный файл не найден")
     return path
 
 
 @router.post("/transcribe/file/")
 async def submit_transcription_file(
     file: UploadFile = File(...),
-    model: ModelSize = Query("small", description="Whisper model size: small, medium, large."),
-    language: str = Query("ru", description="Transcription language code, for example 'ru' or 'en'."),
-    task: str = Query("transcribe", description="Task type: 'transcribe' or 'translate'."),
-    beam_size: int = Query(3, ge=1, le=10, description="Beam search size."),
-    chunk_length: int = Query(20, ge=5, le=60, description="Chunk length in seconds."),
-    patience: float = Query(1.0, ge=0.0, description="Decoding patience."),
-    length_penalty: float = Query(1.0, ge=0.0, description="Length penalty."),
-    repetition_penalty: float = Query(1.5, ge=0.0, description="Repetition penalty."),
-    multilingual: bool = Query(False, description="Enable multilingual decoding."),
-    result_format: ExportFormat = Query("docx", description="Exported result file format."),
-    save_source: bool = Query(False, description="Keep uploaded source file."),
-    save_result: bool = Query(True, description="Keep exported result file."),
+    model: ModelSize = Query("small", description="Размер модели Whisper: small, medium, large."),
+    language: str = Query("ru", description="Код языка транскрибации, например 'ru' или 'en'."),
+    task: str = Query("transcribe", description="Тип задачи: 'transcribe' или 'translate'."),
+    beam_size: int = Query(3, ge=1, le=10, description="Размер beam search."),
+    chunk_length: int = Query(20, ge=5, le=60, description="Длина чанка в секундах."),
+    patience: float = Query(1.0, ge=0.0, description="Параметр терпения декодирования."),
+    length_penalty: float = Query(1.0, ge=0.0, description="Штраф за длину."),
+    repetition_penalty: float = Query(1.5, ge=0.0, description="Штраф за повторы."),
+    multilingual: bool = Query(False, description="Включить многоязычное декодирование."),
+    result_format: ExportFormat = Query("docx", description="Формат экспортируемого файла результата."),
+    save_source: bool = Query(False, description="Сохранить загруженный исходный файл."),
+    save_result: bool = Query(True, description="Сохранить экспортированный файл результата."),
 ):
     raw_bytes = await file.read()
     filename = Path(file.filename or "uploaded_file")
@@ -144,24 +144,24 @@ async def submit_transcription_file(
 
 @router.post("/transcribe/url/")
 async def submit_transcription_url(
-    source_url: str = Query(..., description="Public media URL (YouTube, Rutube, etc.)."),
-    model: ModelSize = Query("small", description="Whisper model size: small, medium, large."),
-    language: str = Query("ru", description="Transcription language code, for example 'ru' or 'en'."),
-    task: str = Query("transcribe", description="Task type: 'transcribe' or 'translate'."),
-    beam_size: int = Query(3, ge=1, le=10, description="Beam search size."),
-    chunk_length: int = Query(20, ge=5, le=60, description="Chunk length in seconds."),
-    patience: float = Query(1.0, ge=0.0, description="Decoding patience."),
-    length_penalty: float = Query(1.0, ge=0.0, description="Length penalty."),
-    repetition_penalty: float = Query(1.5, ge=0.0, description="Repetition penalty."),
-    multilingual: bool = Query(False, description="Enable multilingual decoding."),
-    result_format: ExportFormat = Query("docx", description="Exported result file format."),
-    save_source: bool = Query(False, description="Keep downloaded source file."),
-    save_result: bool = Query(True, description="Keep exported result file."),
+    source_url: str = Query(..., description="Публичный URL медиа (YouTube, Rutube и т.д.)."),
+    model: ModelSize = Query("small", description="Размер модели Whisper: small, medium, large."),
+    language: str = Query("ru", description="Код языка транскрибации, например 'ru' или 'en'."),
+    task: str = Query("transcribe", description="Тип задачи: 'transcribe' или 'translate'."),
+    beam_size: int = Query(3, ge=1, le=10, description="Размер beam search."),
+    chunk_length: int = Query(20, ge=5, le=60, description="Длина чанка в секундах."),
+    patience: float = Query(1.0, ge=0.0, description="Параметр терпения декодирования."),
+    length_penalty: float = Query(1.0, ge=0.0, description="Штраф за длину."),
+    repetition_penalty: float = Query(1.5, ge=0.0, description="Штраф за повторы."),
+    multilingual: bool = Query(False, description="Включить многоязычное декодирование."),
+    result_format: ExportFormat = Query("docx", description="Формат экспортируемого файла результата."),
+    save_source: bool = Query(False, description="Сохранить скачанный исходный файл."),
+    save_result: bool = Query(True, description="Сохранить экспортированный файл результата."),
 ):
     try:
         audio_source = await run_in_threadpool(_download_source, source_url)
     except Exception as exc:
-        raise HTTPException(status_code=400, detail=f"Failed to download source_url: {exc}") from exc
+        raise HTTPException(status_code=400, detail=f"Не удалось скачать source_url: {exc}") from exc
 
     return _enqueue_transcription_task(
         audio_source=audio_source,
@@ -228,5 +228,5 @@ def download_transcription_file(filename: str):
     safe_name = Path(filename).name
     file_path = settings.TRANSCRIBE_RESULTS_DIR / safe_name
     if not file_path.exists() or not file_path.is_file():
-        raise HTTPException(status_code=404, detail="File not found")
+        raise HTTPException(status_code=404, detail="Файл не найден")
     return FileResponse(path=file_path, filename=safe_name)

@@ -16,7 +16,7 @@ logger = get_logger("worker.init")
 @worker_process_init.connect
 def init_transcriber_worker(**kwargs):
     for model_name in MODEL_CATALOG.values():
-        logger.info("Starting model init: %s", model_name)
+        logger.info("Начинается инициализация модели: %s", model_name)
         transcriber_service.init(
             model_name=model_name,
             device=settings.DEVICE,
@@ -26,8 +26,8 @@ def init_transcriber_worker(**kwargs):
             cpu_threads=settings.MODEL_CPU_THREADS,
             num_workers=settings.MODEL_NUM_WORKERS,
         )
-        logger.info("Completed model init: %s", model_name)
-    logger.info("Worker model preloading finished. Loaded %d model(s).", len(MODEL_CATALOG))
+        logger.info("Инициализация модели завершена: %s", model_name)
+    logger.info("Предзагрузка моделей воркера завершена. Загружено: %d.", len(MODEL_CATALOG))
 
 @celery_app.task(name="transcribe.process")
 def process_transcription(
