@@ -67,7 +67,7 @@ services:
 networks:
   service_network:
     driver: bridge
-    name: speech_private_net
+    name: shared_net
 
 volumes:
   redis_data:
