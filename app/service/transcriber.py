@@ -7,6 +7,7 @@ from typing import Optional
 
 from app.settings import settings
 from app.utils.export import export_result, ExportFormat
+from app.utils.logging import get_logger
 from app.models.transcriber import FastWhisperTranscriber
 
 
@@ -14,19 +15,28 @@ class TranscriberService:
     def __init__(self):
         self.transcriber: Optional[FastWhisperTranscriber] = None
         self.current_model_name: str | None = None
+        self.logger = get_logger("worker.models")
 
     def init(self, **kwargs):
         model_name = kwargs["model_name"]
         if self.transcriber and self.current_model_name == model_name:
+            self.logger.info("Запрошена уже активная модель: %s", model_name)
             return self.transcriber
 
         if self.transcriber is not None:
+            self.logger.info(
+                "Переключение модели: %s -> %s. Выгружаем текущую модель из памяти.",
+                self.current_model_name,
+                model_name,
+            )
             self.transcriber = None
             gc.collect()
 
+        self.logger.info("Загружаем модель: %s", model_name)
         transcriber = FastWhisperTranscriber(**kwargs)
         self.transcriber = transcriber
         self.current_model_name = model_name
+        self.logger.info("Модель активирована: %s", model_name)
         return transcriber
 
     def is_ready(self) -> bool:
@@ -43,6 +53,7 @@ class TranscriberService:
     def get_or_init(self, **kwargs) -> FastWhisperTranscriber:
         model_name = kwargs["model_name"]
         if self.transcriber and self.current_model_name == model_name:
+            self.logger.info("Используется уже загруженная модель: %s", model_name)
             return self.transcriber
         return self.init(**kwargs)
     
