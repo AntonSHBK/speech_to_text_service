@@ -1,4 +1,4 @@
-# Speech-to-Text API (Whisper)
+﻿# Speech-to-Text API (Whisper)
 
 **Speech-to-Text API** is a production-ready microservice for automatic speech recognition built with **FastAPI** and **OpenAI Whisper** (via **faster-whisper**).
 The service provides high-quality transcription for audio and video files with support for **multilingual speech recognition**, optimized for CPU inference.
@@ -34,10 +34,23 @@ Model is selected per request using `model` query parameter.
 
 ## Quick Start (Docker)
 
-From project root:
+The project now has two Docker Compose configurations:
+
+- CPU: `docker/docker-compose.yml`
+- CUDA (GPU): `docker/docker-compose.cuda.yml`
+
+From project root, run one of the following:
+
+CPU:
 
 ```bash
 docker compose -f docker/docker-compose.yml up --build
+```
+
+CUDA:
+
+```bash
+docker compose -f docker/docker-compose.cuda.yml up --build
 ```
 
 Available locally:
@@ -246,3 +259,4 @@ python -m app.scripts.clean_transcriptions
 ## License
 
 Apache License 2.0
+
