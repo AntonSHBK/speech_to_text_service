@@ -1,0 +1,19 @@
+# VCS and IDE
+.git
+.gitignore
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Runtime data and logs
+data/cache_dir/
+data/audio/
+data/transcriptions/
+
+# Local artifacts
+notebooks/
+other/
+*.ipynb

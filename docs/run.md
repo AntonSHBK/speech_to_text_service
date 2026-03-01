@@ -130,3 +130,8 @@ python -c "import torch; print(torch.cuda.is_available())"
 ```
 Если вывод `False`, установите PyTorch с поддержкой GPU:  
 👉 [Руководство по установке](https://pytorch.org/get-started/locally/)
+
+
+```bash
+docker compose -f docker/docker-compose.yml build
+```

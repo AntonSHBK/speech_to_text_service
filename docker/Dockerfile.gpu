@@ -1,0 +1,52 @@
+FROM nvidia/cuda:12.6.2-cudnn-runtime-ubuntu22.04
+
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PYTHON_VERSION=3.12.8
+
+RUN set -eux; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends \
+        wget \
+        xz-utils \
+        ffmpeg \
+        build-essential \
+        ca-certificates \
+        libssl-dev \
+        zlib1g-dev \
+        libbz2-dev \
+        libreadline-dev \
+        libsqlite3-dev \
+        libffi-dev \
+        liblzma-dev \
+        tk-dev \
+        uuid-dev \
+        libgdbm-dev \
+        libnss3-dev \
+        libncursesw5-dev \
+        fonts-dejavu-core; \
+    rm -rf /var/lib/apt/lists/*
+
+RUN set -eux; \
+    wget -O /tmp/Python.tgz "https://www.python.org/ftp/python/${PYTHON_VERSION}/Python-${PYTHON_VERSION}.tgz"; \
+    tar -xzf /tmp/Python.tgz -C /tmp; \
+    cd /tmp/Python-${PYTHON_VERSION}; \
+    ./configure --with-ensurepip=install; \
+    make -j2; \
+    make altinstall; \
+    ln -sf /usr/local/bin/python3.12 /usr/bin/python3; \
+    ln -sf /usr/local/bin/pip3.12 /usr/bin/pip3; \
+    rm -rf /tmp/Python.tgz /tmp/Python-${PYTHON_VERSION}
+
+WORKDIR /app
+
+COPY requirements.txt .
+RUN python3.12 -m pip install --no-cache-dir --upgrade pip setuptools wheel \
+    && python3.12 -m pip install --no-cache-dir -r requirements.txt
+
+COPY . .
+
+ENV PYTHONPATH=/app
+
+EXPOSE 8000

@@ -4,13 +4,16 @@ services:
   speech-to-text-service:
     build:
       context: ../
-      dockerfile: ./docker/Dockerfile.cpu
+      dockerfile: ./docker/Dockerfile.gpu
     volumes:
       - ../:/app/
       - ../logs:/app/logs
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000
     env_file:
       - ./.env
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
     ports:
       - "8000:8000"
     depends_on:
@@ -22,13 +25,18 @@ services:
   worker:
     build:
       context: ../
-      dockerfile: ./docker/Dockerfile.cpu
+      dockerfile: ./docker/Dockerfile.gpu
     volumes:
       - ../:/app/
       - ../logs:/app/logs
     command: celery -A app.celery_worker.celery_app worker --loglevel=info --concurrency=1
     env_file:
       - ./.env
+    environment:
+      - DEVICE=cuda
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+    gpus: all
     depends_on:
       - redis
     networks:
@@ -38,10 +46,13 @@ services:
   flower:
     build:
       context: ../
-      dockerfile: ./docker/Dockerfile.cpu
+      dockerfile: ./docker/Dockerfile.gpu
     command: celery -A app.celery_worker.celery_app flower --port=5555 --basic_auth=${FLOWER_BASIC_AUTH} --persistent=True --db=/data/flower.db
     env_file:
       - ./.env
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
     volumes:
       - flower_data:/data
     depends_on:
