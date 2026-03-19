@@ -86,6 +86,7 @@
     const overlayProgress = document.getElementById("overlayProgress");
 
     let lastResultFile = null;
+    let lastResultFilename = null;
     let lastDownloadUrl = null;
     const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -93,6 +94,7 @@
       e.preventDefault();
       output.value = "";
       lastResultFile = null;
+      lastResultFilename = null;
       lastDownloadUrl = null;
       downloadBtn.classList.add("hidden");
       overlay.classList.remove("hidden");
@@ -129,8 +131,9 @@
             const result = statusData.result || {};
             output.value = result.text || "";
             lastResultFile = result.result_file || null;
+            lastResultFilename = result.result_filename || null;
             if (lastResultFile) {
-              const fileName = lastResultFile.split("/").pop();
+              const fileName = lastResultFilename || lastResultFile.split("/").pop();
               lastDownloadUrl = `/transcribe/files/${encodeURIComponent(fileName)}`;
               downloadBtn.classList.remove("hidden");
             }
@@ -163,7 +166,7 @@
         const blob = await fileResponse.blob();
 
         const url = URL.createObjectURL(blob);
-        const filename = lastResultFile.split("/").pop();
+        const filename = lastResultFilename || lastResultFile.split("/").pop();
 
         const a = document.createElement("a");
         a.href = url;

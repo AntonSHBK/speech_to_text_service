@@ -87,8 +87,10 @@ def process_transcription(
                 format=result_format,
             )
             result["result_file"] = str(result_file)
+            result["result_filename"] = result_file.name
         else:
             result["result_file"] = None
+            result["result_filename"] = None
 
         return result
     finally:

@@ -203,7 +203,8 @@ Done:
     "segments": [
       { "start": 0.0, "end": 4.2, "text": "Segment text" }
     ],
-    "result_file": "/app/data/transcriptions/audio_19_02_2026_103000.pdf"
+    "result_file": "/app/data/transcriptions/audio_19_02_2026_103000.pdf",
+    "result_filename": "audio_19_02_2026_103000.pdf"
   }
 }
 ```
@@ -259,4 +260,3 @@ python -m app.scripts.clean_transcriptions
 ## License
 
 Apache License 2.0
-
