@@ -24,7 +24,7 @@ def init_transcriber_worker(**kwargs):
         device=settings.DEVICE,
         cache_dir=settings.CACHE_DIR,
         token=None,
-        compute_type="default",
+        compute_type=settings.MODEL_COMPUTE_TYPE,
         cpu_threads=settings.MODEL_CPU_THREADS,
         num_workers=settings.MODEL_NUM_WORKERS,
     )
@@ -71,7 +71,7 @@ def process_transcription(
             device=settings.DEVICE,
             cache_dir=settings.CACHE_DIR,
             token=None,
-            compute_type="default",
+            compute_type=settings.MODEL_COMPUTE_TYPE,
             cpu_threads=settings.MODEL_CPU_THREADS,
             num_workers=settings.MODEL_NUM_WORKERS,
         )

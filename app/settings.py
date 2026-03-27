@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+from typing import Literal
 
 import torch
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -8,6 +9,18 @@ from pydantic import field_validator, Field
 from app.utils.logging import setup_logging
 
 BASE_DIR = Path(__file__).resolve().parent.parent
+ModelComputeType = Literal[
+    "default",
+    "auto",
+    "int8",
+    "int8_float32",
+    "int8_float16",
+    "int8_bfloat16",
+    "int16",
+    "float16",
+    "bfloat16",
+    "float32",
+]
 
 
 class Settings(BaseSettings):
@@ -28,6 +41,7 @@ class Settings(BaseSettings):
     
     MODEL_CPU_THREADS: int = 2
     MODEL_NUM_WORKERS: int = 4
+    MODEL_COMPUTE_TYPE: ModelComputeType = "default"
     
     CELERY_BROKER_URL: str = "redis://localhost:6379/0"
     CELERY_RESULT_BACKEND: str = "redis://localhost:6379/0"
