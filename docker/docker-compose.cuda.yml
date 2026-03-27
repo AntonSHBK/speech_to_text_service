@@ -23,6 +23,9 @@ services:
     build:
       context: ../
       dockerfile: ./docker/Dockerfile.gpu
+    volumes:
+      - ../:/app/
+      - ../logs:/app/logs
     command: celery -A app.celery_worker.celery_app worker --loglevel=info --pool=solo --concurrency=1
     env_file:
       - ./.env

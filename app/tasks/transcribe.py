@@ -4,6 +4,7 @@ from celery.signals import worker_process_init
 
 from app.celery_app import celery_app
 from app.models.catalog import MODEL_CATALOG, ModelSize, resolve_model_name
+from app.service.source_downloader import download_source
 from app.service.queue_tracker import mark_task_started
 from app.service.transcriber import transcriber_service
 from app.settings import settings
@@ -32,8 +33,9 @@ def init_transcriber_worker(**kwargs):
 
 @celery_app.task(name="transcribe.process")
 def process_transcription(
-    audio_path: str,
-    source_filename: str,
+    audio_path: str | None = None,
+    source_filename: str | None = None,
+    source_url: str | None = None,
     model: ModelSize = "medium",
     language: str = "ru",
     task: str = "transcribe",
@@ -47,13 +49,23 @@ def process_transcription(
     save_source: bool = False,
     save_result: bool = True,
 ) -> dict:
-    input_path = Path(audio_path)
+    input_path = Path(audio_path) if audio_path else None
     result_file = None
     resolved_model_name = resolve_model_name(model)
     mark_task_started(process_transcription.request.id)
     process_transcription.update_state(state="PROGRESS", meta={"progress": 0.0})
 
     try:
+        if source_url:
+            logger.info("Скачивание source_url начато: %s", source_url)
+            input_path = download_source(source_url)
+            logger.info("Скачивание source_url завершено: %s", input_path)
+
+        if not input_path:
+            raise ValueError("Не передан источник аудио: audio_path или source_url")
+
+        source_filename = source_filename or input_path.name
+
         transcriber = transcriber_service.get_or_init(
             model_name=resolved_model_name,
             device=settings.DEVICE,
@@ -94,5 +106,5 @@ def process_transcription(
 
         return result
     finally:
-        if not save_source and input_path.exists():
+        if input_path and not save_source and input_path.exists():
             input_path.unlink(missing_ok=True)

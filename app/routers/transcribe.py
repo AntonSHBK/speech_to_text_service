@@ -1,10 +1,7 @@
 from pathlib import Path
-from urllib.parse import urlparse
 
-from fastapi.concurrency import run_in_threadpool
 from fastapi import APIRouter, File, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse
-from yt_dlp import YoutubeDL
 
 from app.celery_app import celery_app
 from app.models.catalog import ModelSize
@@ -18,8 +15,9 @@ router = APIRouter(tags=["Транскрибация"])
 
 
 def _enqueue_transcription_task(
-    audio_source: Path,
-    source_filename: str,
+    audio_source: Path | None = None,
+    source_filename: str | None = None,
+    source_url: str | None = None,
     model: ModelSize = Query("medium", description="Размер модели Whisper: small, medium, large."),
     language: str = Query("ru", description="Код языка транскрибации, например 'ru' или 'en'."),
     task: str = Query("transcribe", description="Тип задачи: 'transcribe' или 'translate'."),
@@ -33,9 +31,11 @@ def _enqueue_transcription_task(
     save_source: bool = Query(False, description="Сохранить исходный файл."),
     save_result: bool = Query(True, description="Сохранить экспортированный файл результата."),
 ) -> dict:
+    audio_path = str(audio_source) if audio_source else None
     queued_task = process_transcription.delay(
-        audio_path=str(audio_source),
+        audio_path=audio_path,
         source_filename=source_filename,
+        source_url=source_url,
         model=model,
         language=language,
         task=task,
@@ -59,52 +59,6 @@ def _enqueue_transcription_task(
     }
 
 
-def _download_source(url: str) -> Path:
-    parsed = urlparse(url)
-    if parsed.scheme not in ("http", "https"):
-        raise RuntimeError("source_url должен использовать схему http или https")
-
-    ydl_opts = {
-        "format": "bestaudio[ext=m4a]/bestaudio/best",
-        "noplaylist": True,
-        "quiet": True,
-        "no_warnings": True,
-        "restrictfilenames": True,
-        "socket_timeout": settings.YTDLP_SOCKET_TIMEOUT_SEC,
-        "outtmpl": str(settings.AUDIO_DIR / "%(title).120s_%(id)s.%(ext)s"),
-    }
-    with YoutubeDL(ydl_opts) as ydl:
-        metadata = ydl.extract_info(url, download=False)
-        if not metadata:
-            raise RuntimeError("Не удалось получить метаданные источника")
-        if "entries" in metadata and metadata["entries"]:
-            metadata = metadata["entries"][0]
-
-        duration = metadata.get("duration")
-        if duration and duration > settings.YTDLP_MAX_DURATION_SEC:
-            raise RuntimeError(
-                f"Длительность источника превышает лимит: {int(duration)}с > {settings.YTDLP_MAX_DURATION_SEC}с"
-            )
-
-        info = ydl.extract_info(url, download=True)
-        if not info:
-            raise RuntimeError("Не удалось получить медиа по URL")
-
-        if "entries" in info and info["entries"]:
-            info = info["entries"][0]
-
-        filepath = None
-        if info.get("requested_downloads"):
-            filepath = info["requested_downloads"][0].get("filepath")
-        if not filepath:
-            filepath = ydl.prepare_filename(info)
-
-    path = Path(filepath)
-    if not path.exists():
-        raise RuntimeError("Скачанный файл не найден")
-    return path
-
-
 @router.post("/transcribe/file/")
 async def submit_transcription_file(
     file: UploadFile = File(...),
@@ -121,9 +75,12 @@ async def submit_transcription_file(
     save_source: bool = Query(False, description="Сохранить загруженный исходный файл."),
     save_result: bool = Query(True, description="Сохранить экспортированный файл результата."),
 ):
-    raw_bytes = await file.read()
     filename = Path(file.filename or "uploaded_file")
-    audio_source = transcriber_service.prepare_audio(raw_bytes=raw_bytes, filename=filename, save_source=save_source)
+    audio_source = await transcriber_service.prepare_audio_stream(
+        file=file,
+        filename=filename,
+        save_source=save_source,
+    )
     return _enqueue_transcription_task(
         audio_source=audio_source,
         source_filename=filename.name,
@@ -158,14 +115,9 @@ async def submit_transcription_url(
     save_source: bool = Query(False, description="Сохранить скачанный исходный файл."),
     save_result: bool = Query(True, description="Сохранить экспортированный файл результата."),
 ):
-    try:
-        audio_source = await run_in_threadpool(_download_source, source_url)
-    except Exception as exc:
-        raise HTTPException(status_code=400, detail=f"Не удалось скачать source_url: {exc}") from exc
-
     return _enqueue_transcription_task(
-        audio_source=audio_source,
-        source_filename=audio_source.name,
+        source_url=source_url,
+        source_filename=None,
         model=model,
         language=language,
         task=task,

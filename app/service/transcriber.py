@@ -5,6 +5,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
+from fastapi import UploadFile
+
 from app.settings import settings
 from app.utils.export import export_result, ExportFormat
 from app.utils.logging import get_logger
@@ -85,6 +87,45 @@ class TranscriberService:
         )
         tmp.write(raw_bytes)
         tmp.flush()
+        return Path(tmp.name)
+
+    async def prepare_audio_stream(
+        self,
+        file: UploadFile,
+        filename: str | Path,
+        save_source: bool,
+        chunk_size: int = 1024 * 1024,
+    ) -> Path:
+        original = Path(filename)
+
+        stem = original.stem[:20]
+        suffix = original.suffix.lower()
+
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M")
+        uid = uuid.uuid4().hex
+        safe_name = f"{stem}_{timestamp}_{uid}{suffix}"
+
+        if save_source:
+            path = settings.AUDIO_DIR / safe_name
+            with path.open("wb") as out:
+                while True:
+                    chunk = await file.read(chunk_size)
+                    if not chunk:
+                        break
+                    out.write(chunk)
+            return path
+
+        tmp = tempfile.NamedTemporaryFile(
+            delete=False,
+            suffix=suffix,
+            dir=settings.AUDIO_DIR,
+        )
+        with tmp:
+            while True:
+                chunk = await file.read(chunk_size)
+                if not chunk:
+                    break
+                tmp.write(chunk)
         return Path(tmp.name)
     
     def export_result(
