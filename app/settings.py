@@ -7,6 +7,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import field_validator, Field
 
 from app.utils.logging import setup_logging
+from app.models.catalog import ModelSize
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 ModelComputeType = Literal[
@@ -42,7 +43,10 @@ class Settings(BaseSettings):
     MODEL_CPU_THREADS: int = 2
     MODEL_NUM_WORKERS: int = 4
     MODEL_COMPUTE_TYPE: ModelComputeType = "default"
-    
+    MODEL_COMPUTE_TYPE_SMALL: ModelComputeType = "default"
+    MODEL_COMPUTE_TYPE_MEDIUM: ModelComputeType = "default"
+    MODEL_COMPUTE_TYPE_LARGE: ModelComputeType = "default"
+
     CELERY_BROKER_URL: str = "redis://localhost:6379/0"
     CELERY_RESULT_BACKEND: str = "redis://localhost:6379/0"
     YTDLP_SOCKET_TIMEOUT_SEC: int = 180
@@ -68,6 +72,14 @@ class Settings(BaseSettings):
     def create_dirs(cls, v: Path) -> Path:
         v.mkdir(parents=True, exist_ok=True)
         return v
+
+    def get_model_compute_type(self, model: ModelSize) -> ModelComputeType:
+        per_model: dict[ModelSize, ModelComputeType | None] = {
+            "small": self.MODEL_COMPUTE_TYPE_SMALL,
+            "medium": self.MODEL_COMPUTE_TYPE_MEDIUM,
+            "large": self.MODEL_COMPUTE_TYPE_LARGE,
+        }
+        return per_model.get(model) or self.MODEL_COMPUTE_TYPE
 
 settings = Settings()
 
