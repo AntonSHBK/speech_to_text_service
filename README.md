@@ -28,6 +28,31 @@ The service provides high-quality transcription for audio and video files with s
 
 Model is selected per request using `model` query parameter.
 
+## Runtime Settings (.env)
+
+Key inference settings:
+
+```env
+DEVICE=cpu
+MODEL_CPU_THREADS=8
+MODEL_NUM_WORKERS=1
+
+# Global fallback compute type
+MODEL_COMPUTE_TYPE=default
+
+# Per-model compute type overrides
+MODEL_COMPUTE_TYPE_SMALL=default
+MODEL_COMPUTE_TYPE_MEDIUM=default
+MODEL_COMPUTE_TYPE_LARGE=int8
+
+HF_TOKEN=your_hf_token
+```
+
+Per-model compute type is resolved at model load time:
+- `small` -> `MODEL_COMPUTE_TYPE_SMALL` (fallback: `MODEL_COMPUTE_TYPE`)
+- `medium` -> `MODEL_COMPUTE_TYPE_MEDIUM` (fallback: `MODEL_COMPUTE_TYPE`)
+- `large` -> `MODEL_COMPUTE_TYPE_LARGE` (fallback: `MODEL_COMPUTE_TYPE`)
+
 ## Export Formats
 
 `docx`, `txt`, `md`, `pdf`
@@ -96,10 +121,11 @@ POST /transcribe/file/
 | --- | --- | --- |
 | `file` | file | Audio/video file |
 | `model` | string | `small` / `medium` / `large` |
-| `language` | string | Language code (`ru`, `en`, `auto`, ...) |
+| `language` | string | Language code (`ru`, `en`, ...). If omitted, auto-detection is used |
 | `task` | string | `transcribe` or `translate` |
-| `beam_size` | int | 1..10 |
-| `chunk_length` | int | 5..60 seconds |
+| `beam_size` | int | Beam search size (default `5`) |
+| `best_of` | int | Number of candidates for sampling mode (default `5`) |
+| `chunk_length` | int | Chunk length in seconds (optional) |
 | `patience` | float | Decoder patience |
 | `length_penalty` | float | Length penalty |
 | `repetition_penalty` | float | Repetition penalty |
@@ -108,10 +134,20 @@ POST /transcribe/file/
 | `save_source` | bool | Keep uploaded source file |
 | `save_result` | bool | Keep result file |
 
+Advanced faster-whisper parameters are also supported directly in API query:
+
+`log_progress`, `no_repeat_ngram_size`, `temperature`, `compression_ratio_threshold`,
+`log_prob_threshold`, `no_speech_threshold`, `condition_on_previous_text`,
+`prompt_reset_on_temperature`, `initial_prompt`, `prefix`, `suppress_blank`,
+`suppress_tokens`, `without_timestamps`, `max_initial_timestamp`, `word_timestamps`,
+`prepend_punctuations`, `append_punctuations`, `vad_filter`, `vad_parameters` (JSON string),
+`max_new_tokens`, `clip_timestamps`, `hallucination_silence_threshold`, `hotwords`,
+`language_detection_threshold`, `language_detection_segments`.
+
 Example:
 
 ```bash
-curl -X POST "http://127.0.0.1:8000/transcribe/file/?model=medium&language=ru&result_format=pdf" \
+curl -X POST "http://127.0.0.1:8000/transcribe/file/?model=medium&language=ru&result_format=pdf&beam_size=5&word_timestamps=true" \
   -F "file=@audio.mp3"
 ```
 
@@ -138,10 +174,11 @@ POST /transcribe/url/
 | --- | --- | --- |
 | `source_url` | string | Public media URL |
 | `model` | string | `small` / `medium` / `large` |
-| `language` | string | Language code (`ru`, `en`, `auto`, ...) |
+| `language` | string | Language code (`ru`, `en`, ...). If omitted, auto-detection is used |
 | `task` | string | `transcribe` or `translate` |
-| `beam_size` | int | 1..10 |
-| `chunk_length` | int | 5..60 seconds |
+| `beam_size` | int | Beam search size (default `5`) |
+| `best_of` | int | Number of candidates for sampling mode (default `5`) |
+| `chunk_length` | int | Chunk length in seconds (optional) |
 | `patience` | float | Decoder patience |
 | `length_penalty` | float | Length penalty |
 | `repetition_penalty` | float | Repetition penalty |
@@ -150,13 +187,17 @@ POST /transcribe/url/
 | `save_source` | bool | Keep downloaded source file |
 | `save_result` | bool | Keep result file |
 
+The same advanced faster-whisper parameters as in `/transcribe/file/` are supported here too.
+For `vad_parameters` pass JSON as string in query.
+
 Example:
 
 ```bash
-curl -X POST "http://127.0.0.1:8000/transcribe/url/?source_url=https://www.youtube.com/watch?v=VIDEO_ID&model=small&result_format=pdf"
+curl -X POST "http://127.0.0.1:8000/transcribe/url/?source_url=https://www.youtube.com/watch?v=VIDEO_ID&model=small&result_format=pdf&beam_size=5"
 ```
 
 Response is the same queue object as for `/transcribe/file/`.
+`source_url` download now happens in worker during task processing (not in API request lifecycle).
 
 ### 4) Get task status/result
 
