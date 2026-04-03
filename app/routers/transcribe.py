@@ -597,7 +597,7 @@ def get_transcription_status(task_id: str):
     }
 
 
-@router.get("/transcribe/files/{filename}")
+@router.get("/transcribe/get_result/{filename}")
 def download_transcription_file(filename: str):
     safe_name = Path(filename).name
     file_path = settings.TRANSCRIBE_RESULTS_DIR / safe_name

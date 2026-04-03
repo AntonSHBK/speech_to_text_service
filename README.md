@@ -265,7 +265,7 @@ Failed:
 ### 5) Download exported file
 
 ```http
-GET /transcribe/files/{filename}
+GET /transcribe/get_result/{filename}
 ```
 
 Example:
