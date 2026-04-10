@@ -15,9 +15,8 @@ RUN set -eux; \
 
 WORKDIR /app
 
-COPY requirements.txt requirements.torch.cpu.txt ./
+COPY requirements.txt ./
 RUN pip install --no-cache-dir --upgrade pip \
-    && pip install --no-cache-dir -r requirements.torch.cpu.txt \
     && pip install --no-cache-dir -r requirements.txt
 
 COPY . .
