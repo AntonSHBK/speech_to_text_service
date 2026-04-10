@@ -1,0 +1,5 @@
+# CPU wheels for PyTorch ecosystem
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.10.0
+torchaudio==2.10.0
+torchcodec==0.10.*
