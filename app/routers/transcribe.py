@@ -1,11 +1,12 @@
 ﻿from pathlib import Path
 from typing import Optional
+import mimetypes
 
 from fastapi import APIRouter, File, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse
 
 from app.celery_app import celery_app
-from app.models.catalog import ModelSize
+from app.models.catalog import ModelDiarizationType, ModelTranscribeSize
 from app.service.queue_tracker import enqueue_task, get_queue_position
 from app.service.transcriber import transcriber_service
 from app.settings import settings
@@ -23,7 +24,7 @@ def _enqueue_transcription_task(
     audio_source: Path | None = None,
     source_filename: str | None = None,
     source_url: str | None = None,
-    model: ModelSize = "medium",
+    model: ModelTranscribeSize = "medium",
     language: Optional[str] = None,
     task: str = "transcribe",
     log_progress: bool = False,
@@ -58,7 +59,13 @@ def _enqueue_transcription_task(
     hotwords: str | None = None,
     language_detection_threshold: float | None = 0.5,
     language_detection_segments: int = 1,
+    diarization: bool = False,
+    diarization_model: ModelDiarizationType = "pyannote_1",
+    num_speakers: int | None = None,
+    min_speakers: int | None = None,
+    max_speakers: int | None = None,
     result_format: ExportFormat = "docx",
+    export_timestamps: bool = False,
     save_source: bool = False,
     save_result: bool = True,
 ) -> dict:
@@ -102,7 +109,13 @@ def _enqueue_transcription_task(
         hotwords=hotwords,
         language_detection_threshold=language_detection_threshold,
         language_detection_segments=language_detection_segments,
+        diarization=diarization,
+        diarization_model=diarization_model,
+        num_speakers=num_speakers,
+        min_speakers=min_speakers,
+        max_speakers=max_speakers,
         result_format=result_format,
+        export_timestamps=export_timestamps,
         save_source=save_source,
         save_result=save_result,
     )
@@ -119,7 +132,7 @@ def _enqueue_transcription_task(
 @router.post("/transcribe/file/")
 async def submit_transcription_file(
     file: UploadFile = File(...),
-    model: ModelSize = Query(
+    model: ModelTranscribeSize = Query(
         "medium",
         description="Размер модели Whisper: small, medium, large.",
     ),
@@ -274,9 +287,36 @@ async def submit_transcription_file(
         ge=1,
         description="Количество сегментов для определения языка.",
     ),
+    diarization: bool = Query(
+        False,
+        description="Включить diarization (разметку спикеров).",
+    ),
+    diarization_model: ModelDiarizationType = Query(
+        "pyannote_1",
+        description="Модель diarization: pyannote_1 или pyannote_3_1.",
+    ),
+    num_speakers: int | None = Query(
+        None,
+        ge=1,
+        description="Точное число спикеров (если известно заранее).",
+    ),
+    min_speakers: int | None = Query(
+        None,
+        ge=1,
+        description="Минимальное число спикеров.",
+    ),
+    max_speakers: int | None = Query(
+        None,
+        ge=1,
+        description="Максимальное число спикеров.",
+    ),
     result_format: ExportFormat = Query(
         "docx",
         description="Формат экспортируемого файла результата.",
+    ),
+    export_timestamps: bool = Query(
+        False,
+        description="Добавлять таймкоды в экспортируемый файл результата.",
     ),
     save_source: bool = Query(
         False,
@@ -331,7 +371,13 @@ async def submit_transcription_file(
         hotwords=hotwords,
         language_detection_threshold=language_detection_threshold,
         language_detection_segments=language_detection_segments,
+        diarization=diarization,
+        diarization_model=diarization_model,
+        num_speakers=num_speakers,
+        min_speakers=min_speakers,
+        max_speakers=max_speakers,
         result_format=result_format,
+        export_timestamps=export_timestamps,
         save_source=save_source,
         save_result=save_result,
     )
@@ -343,7 +389,7 @@ async def submit_transcription_url(
         ...,
         description="Публичный URL медиа (YouTube, Rutube и т.д.)."
     ),
-    model: ModelSize = Query(
+    model: ModelTranscribeSize = Query(
         "medium",
         description="Размер модели Whisper: small, medium, large.",
     ),
@@ -498,9 +544,36 @@ async def submit_transcription_url(
         ge=1,
         description="Количество сегментов для определения языка.",
     ),
+    diarization: bool = Query(
+        False,
+        description="Включить diarization (разметку спикеров).",
+    ),
+    diarization_model: ModelDiarizationType = Query(
+        "pyannote_1",
+        description="Модель diarization: pyannote_1 или pyannote_3_1.",
+    ),
+    num_speakers: int | None = Query(
+        None,
+        ge=1,
+        description="Точное число спикеров (если известно заранее).",
+    ),
+    min_speakers: int | None = Query(
+        None,
+        ge=1,
+        description="Минимальное число спикеров.",
+    ),
+    max_speakers: int | None = Query(
+        None,
+        ge=1,
+        description="Максимальное число спикеров.",
+    ),
     result_format: ExportFormat = Query(
         "docx",
         description="Формат экспортируемого файла результата.",
+    ),
+    export_timestamps: bool = Query(
+        False,
+        description="Добавлять таймкоды в экспортируемый файл результата.",
     ),
     save_source: bool = Query(
         False,
@@ -549,7 +622,13 @@ async def submit_transcription_url(
         hotwords=hotwords,
         language_detection_threshold=language_detection_threshold,
         language_detection_segments=language_detection_segments,
+        diarization=diarization,
+        diarization_model=diarization_model,
+        num_speakers=num_speakers,
+        min_speakers=min_speakers,
+        max_speakers=max_speakers,
         result_format=result_format,
+        export_timestamps=export_timestamps,
         save_source=save_source,
         save_result=save_result,
     )
@@ -560,13 +639,19 @@ def get_transcription_status(task_id: str):
     result = celery_app.AsyncResult(task_id)
     meta = result.info if isinstance(result.info, dict) else {}
     progress = meta.get("progress")
+    progress_overall = meta.get("progress_overall", progress)
+    progress_transcription = meta.get("progress_transcription")
+    progress_diarization = meta.get("progress_diarization")
 
     if result.state == "FAILURE":
         return {
             "task_id": task_id,
             "status": "failed",
             "queue_position": None,
-            "progress": progress,
+            "progress": progress_overall,
+            "progress_overall": progress_overall,
+            "progress_transcription": progress_transcription,
+            "progress_diarization": progress_diarization,
             "error": str(result.result),
         }
 
@@ -576,6 +661,11 @@ def get_transcription_status(task_id: str):
             "status": "done",
             "queue_position": None,
             "progress": 100.0,
+            "progress_overall": 100.0,
+            "progress_transcription": 100.0,
+            "progress_diarization": (
+                100.0 if isinstance(result.result, dict) and "diarization" in result.result else None
+            ),
             "result": result.result,
         }
 
@@ -589,18 +679,28 @@ def get_transcription_status(task_id: str):
     queue_position = get_queue_position(task_id) if status == "queued" else None
     if status == "queued" and progress is None:
         progress = 0.0
+    if status == "queued" and progress_overall is None:
+        progress_overall = 0.0
     return {
         "task_id": task_id,
         "status": status,
         "queue_position": queue_position,
-        "progress": progress,
+        "progress": progress_overall,
+        "progress_overall": progress_overall,
+        "progress_transcription": progress_transcription,
+        "progress_diarization": progress_diarization,
     }
 
 
-@router.get("/transcribe/get_result/{filename}")
+@router.get("/transcribe/get_result/{filename:path}")
 def download_transcription_file(filename: str):
     safe_name = Path(filename).name
     file_path = settings.TRANSCRIBE_RESULTS_DIR / safe_name
     if not file_path.exists() or not file_path.is_file():
         raise HTTPException(status_code=404, detail="Файл не найден")
-    return FileResponse(path=file_path, filename=safe_name)
+    media_type, _ = mimetypes.guess_type(str(file_path))
+    return FileResponse(
+        path=file_path,
+        filename=safe_name,
+        media_type=media_type or "application/octet-stream",
+    )

@@ -4,20 +4,74 @@ from docx import Document
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.shared import Pt
 
+from app.utils.exporters.common import build_speaker_blocks, format_timestamp
 
-def export_docx(result: dict, path: Path) -> Path:
+
+def _configure_paragraph(paragraph) -> None:
+    paragraph.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+    paragraph_format = paragraph.paragraph_format
+    paragraph_format.line_spacing = 1.25
+    paragraph_format.space_after = Pt(6)
+    paragraph_format.space_before = Pt(6)
+
+
+def _part_to_chunk(part: dict, export_timestamps: bool) -> str:
+    text = str(part.get("text", "")).strip()
+    if not text:
+        return ""
+    if not export_timestamps:
+        return text
+    start = format_timestamp(part.get("start"))
+    end = format_timestamp(part.get("end"))
+    return f"[{start} - {end}] {text}"
+
+
+def _append_block_paragraph(document: Document, block: dict, export_timestamps: bool) -> None:
+    parts = block.get("parts") or []
+    speaker = block.get("speaker")
+
+    paragraph = document.add_paragraph()
+    _configure_paragraph(paragraph)
+
+    if speaker:
+        speaker_run = paragraph.add_run(f"{speaker}: ")
+        speaker_run.bold = True
+
+    first_chunk = True
+    for part in parts:
+        chunk = _part_to_chunk(part, export_timestamps=export_timestamps)
+        if not chunk:
+            continue
+        if not first_chunk:
+            paragraph.add_run(" ")
+        paragraph.add_run(chunk)
+        first_chunk = False
+
+
+def export_docx(result: dict, path: Path, export_timestamps: bool = False) -> Path:
     document = Document()
 
     heading = document.add_heading("Результат транскрибации", level=1)
     heading.alignment = WD_ALIGN_PARAGRAPH.CENTER
 
-    paragraph = document.add_paragraph(result.get("text", ""))
-    paragraph.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
-
-    paragraph_format = paragraph.paragraph_format
-    paragraph_format.line_spacing = 1.25
-    paragraph_format.space_after = Pt(6)
-    paragraph_format.space_before = Pt(6)
+    blocks = build_speaker_blocks(result)
+    if blocks:
+        has_speakers = any(block.get("speaker") for block in blocks)
+        if has_speakers:
+            for block in blocks:
+                _append_block_paragraph(document, block, export_timestamps=export_timestamps)
+        else:
+            merged_parts: list[dict] = []
+            for block in blocks:
+                merged_parts.extend(block.get("parts") or [])
+            _append_block_paragraph(
+                document,
+                {"speaker": None, "parts": merged_parts},
+                export_timestamps=export_timestamps,
+            )
+    else:
+        paragraph = document.add_paragraph(result.get("text", "") or "")
+        _configure_paragraph(paragraph)
 
     document.save(path)
     return path

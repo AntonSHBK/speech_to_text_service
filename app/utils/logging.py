@@ -14,16 +14,41 @@ def _create_logger(name: str, log_dir: Path, log_file: str, log_level: str, max_
     logger = logging.getLogger(name)
     logger.setLevel(log_level)
 
-    file_handler = RotatingFileHandler(
-        log_dir / log_file,
-        maxBytes=max_bytes,
-        backupCount=backup_count,
-        encoding="utf-8"
-    )
-    file_handler.setFormatter(formatter)
-    logger.addHandler(file_handler)
+    target_path = (log_dir / log_file).resolve()
+    has_same_file_handler = False
+    for handler in logger.handlers:
+        if isinstance(handler, RotatingFileHandler):
+            try:
+                if Path(handler.baseFilename).resolve() == target_path:
+                    has_same_file_handler = True
+                    break
+            except Exception:
+                continue
+
+    if not has_same_file_handler:
+        file_handler = RotatingFileHandler(
+            target_path,
+            maxBytes=max_bytes,
+            backupCount=backup_count,
+            encoding="utf-8"
+        )
+        file_handler.setFormatter(formatter)
+        logger.addHandler(file_handler)
 
     return logger
+
+
+def _resolve_log_file_by_name(name: str) -> str:
+    """Возвращает имя файла лога для логгера."""
+    if name.startswith("api"):
+        return "api.log"
+    if name.startswith("model.") or name.startswith("diarization.") or name == "worker.models":
+        return "model.log"
+    if name.startswith("worker."):
+        return "worker.log"
+
+    safe_name = "".join(ch if ch.isalnum() or ch in "._-" else "_" for ch in name)
+    return f"{safe_name}.log"
 
 
 def setup_logging(log_dir: Path = Path("logs"), log_level: str = "INFO"):
@@ -56,10 +81,6 @@ def setup_logging(log_dir: Path = Path("logs"), log_level: str = "INFO"):
         file_handler.setFormatter(formatter)
         root_logger.addHandler(file_handler)
 
-    # API и Model логгеры
-    _create_logger("api", log_dir, "api.log", log_level, max_bytes=5 * 1024 * 1024, backup_count=3).propagate = True
-    _create_logger("model", log_dir, "model.log", log_level, max_bytes=5 * 1024 * 1024, backup_count=3).propagate = False
-
 
 def get_logger(name: str, log_dir: Path = Path("logs"), log_file: str | None = None, log_level: str = "INFO"):
     """
@@ -69,8 +90,15 @@ def get_logger(name: str, log_dir: Path = Path("logs"), log_file: str | None = N
     logger = logging.getLogger(name)
     logger.setLevel(log_level.upper())
 
-    if log_file:
-        log_dir.mkdir(parents=True, exist_ok=True)
-        _create_logger(name, log_dir, log_file, log_level.upper(), max_bytes=5 * 1024 * 1024, backup_count=3).propagate = False
+    resolved_log_file = log_file or _resolve_log_file_by_name(name)
+    log_dir.mkdir(parents=True, exist_ok=True)
+    _create_logger(
+        name=name,
+        log_dir=log_dir,
+        log_file=resolved_log_file,
+        log_level=log_level.upper(),
+        max_bytes=5 * 1024 * 1024,
+        backup_count=3,
+    )
 
     return logger

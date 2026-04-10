@@ -9,15 +9,20 @@ from app.utils.exporters.txt_exporter import export_txt
 ExportFormat = Literal["docx", "txt", "md", "pdf"]
 
 
-def export_result(result: dict, path: Path, format: ExportFormat) -> Path:
+def export_result(
+    result: dict,
+    path: Path,
+    format: ExportFormat,
+    export_timestamps: bool = False,
+) -> Path:
     match format:
         case "docx":
-            return export_docx(result, path)
+            return export_docx(result, path, export_timestamps=export_timestamps)
         case "txt":
-            return export_txt(result, path)
+            return export_txt(result, path, export_timestamps=export_timestamps)
         case "md":
-            return export_markdown(result, path)
+            return export_markdown(result, path, export_timestamps=export_timestamps)
         case "pdf":
-            return export_pdf(result, path)
+            return export_pdf(result, path, export_timestamps=export_timestamps)
         case _:
             raise ValueError(f"Unsupported export format: {format}")

@@ -9,6 +9,8 @@ MODEL_CATALOG: Dict[str, str] = {
     "small": "Systran/faster-whisper-small",
     "medium": "Systran/faster-whisper-medium",
     "large": "Systran/faster-whisper-large-v3",
+    "diarization_1": "pyannote/speaker-diarization-community-1",
+    "diarization_3_1": "pyannote/speaker-diarization-3.1",
 }
 
 CACHE_DIR = Path("/app/data/cache_dir")

@@ -7,7 +7,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import field_validator, Field
 
 from app.utils.logging import setup_logging
-from app.models.catalog import ModelSize
+from app.models.catalog import ModelTranscribeSize
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 ModelComputeType = Literal[
@@ -73,8 +73,8 @@ class Settings(BaseSettings):
         v.mkdir(parents=True, exist_ok=True)
         return v
 
-    def get_model_compute_type(self, model: ModelSize) -> ModelComputeType:
-        per_model: dict[ModelSize, ModelComputeType | None] = {
+    def get_model_compute_type(self, model: ModelTranscribeSize) -> ModelComputeType:
+        per_model: dict[ModelTranscribeSize, ModelComputeType | None] = {
             "small": self.MODEL_COMPUTE_TYPE_SMALL,
             "medium": self.MODEL_COMPUTE_TYPE_MEDIUM,
             "large": self.MODEL_COMPUTE_TYPE_LARGE,

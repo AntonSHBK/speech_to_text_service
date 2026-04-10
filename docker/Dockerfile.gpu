@@ -32,12 +32,16 @@ RUN set -eux; \
     wget -O /tmp/Python.tgz "https://www.python.org/ftp/python/${PYTHON_VERSION}/Python-${PYTHON_VERSION}.tgz"; \
     tar -xzf /tmp/Python.tgz -C /tmp; \
     cd /tmp/Python-${PYTHON_VERSION}; \
-    ./configure --with-ensurepip=install; \
+    ./configure --with-ensurepip=install --enable-shared; \
     make -j2; \
     make altinstall; \
     ln -sf /usr/local/bin/python3.12 /usr/bin/python3; \
     ln -sf /usr/local/bin/pip3.12 /usr/bin/pip3; \
     rm -rf /tmp/Python.tgz /tmp/Python-${PYTHON_VERSION}
+
+RUN set -eux; \
+    echo "/usr/local/lib" > /etc/ld.so.conf.d/python3.12.conf; \
+    ldconfig
 
 WORKDIR /app
 
@@ -48,5 +52,6 @@ RUN python3.12 -m pip install --no-cache-dir --upgrade pip setuptools wheel \
 COPY . .
 
 ENV PYTHONPATH=/app
+ENV LD_LIBRARY_PATH=/usr/local/lib:${LD_LIBRARY_PATH}
 
 EXPOSE 8000

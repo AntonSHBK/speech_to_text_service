@@ -1,10 +1,11 @@
 ﻿from pathlib import Path
 import json
+import torchaudio
 
 from celery.signals import worker_process_init
 
 from app.celery_app import celery_app
-from app.models.catalog import ModelSize, resolve_model_name
+from app.models.catalog import ModelDiarizationType, ModelTranscribeSize, resolve_model_name
 from app.service.source_downloader import download_source
 from app.service.queue_tracker import mark_task_started
 from app.service.transcriber import transcriber_service
@@ -14,10 +15,72 @@ from app.utils.logging import get_logger
 
 logger = get_logger("worker.init")
 
+TRANSCRIPTION_WEIGHT = 0.50
+DIARIZATION_WEIGHT = 0.50
+
+
+def _probe_media_duration_seconds(audio_path: Path) -> float | None:
+    try:
+        if hasattr(torchaudio, "info"):
+            info = torchaudio.info(str(audio_path))
+            sample_rate = int(getattr(info, "sample_rate", 0) or 0)
+            num_frames = int(getattr(info, "num_frames", 0) or 0)
+        else:
+            waveform, sample_rate = torchaudio.load(str(audio_path))
+            sample_rate = int(sample_rate or 0)
+            num_frames = int(waveform.shape[-1]) if waveform is not None else 0
+
+        if sample_rate <= 0 or num_frames <= 0:
+            return None
+        duration = float(num_frames) / float(sample_rate)
+        if duration <= 0:
+            return None
+        return duration
+    except Exception as exc:
+        logger.warning(
+            "Не удалось определить длительность медиа через torchaudio: %s | файл=%s",
+            exc,
+            audio_path,
+        )
+        return None
+
+
+def _select_model_by_duration(
+    model: ModelTranscribeSize,
+    audio_path: Path,
+) -> ModelTranscribeSize:
+    duration = _probe_media_duration_seconds(audio_path)
+    if duration is None:
+        logger.info(
+            "Автовыбор модели пропущен (длительность не определена), используем модель из запроса: %s",
+            model,
+        )
+        return model
+
+    # Временная логика:
+    # < 1 минуты -> small
+    # 1 минута .. 1 час -> medium
+    # > 1 часа -> small
+    if duration < 60:
+        selected_model: ModelTranscribeSize = "small"
+    elif duration <= 3600:
+        selected_model = "medium"
+    else:
+        selected_model = "small"
+
+    logger.info(
+        "Автовыбор модели по длительности | файл=%s | длительность=%.2fs | модель_запроса=%s | модель_выбрана=%s",
+        audio_path.name,
+        duration,
+        model,
+        selected_model,
+    )
+    return selected_model
+
 
 @worker_process_init.connect
 def init_transcriber_worker(**kwargs):
-    default_model_key: ModelSize = "medium"
+    default_model_key: ModelTranscribeSize = "medium"
     default_model_name = resolve_model_name(default_model_key)
     compute_type = settings.get_model_compute_type(default_model_key)
     logger.info("Начинается инициализация модели по умолчанию: %s", default_model_name)
@@ -39,7 +102,7 @@ def process_transcription(
     audio_path: str | None = None,
     source_filename: str | None = None,
     source_url: str | None = None,
-    model: ModelSize = "medium",
+    model: ModelTranscribeSize = "medium",
     language: str | None = None,
     task: str = "transcribe",
     log_progress: bool = False,
@@ -74,16 +137,53 @@ def process_transcription(
     hotwords: str | None = None,
     language_detection_threshold: float | None = 0.5,
     language_detection_segments: int = 1,
+    diarization: bool = False,
+    diarization_model: ModelDiarizationType = "pyannote_1",
+    num_speakers: int | None = None,
+    min_speakers: int | None = None,
+    max_speakers: int | None = None,
     result_format: ExportFormat = "docx",
+    export_timestamps: bool = False,
     save_source: bool = False,
     save_result: bool = True,
 ) -> dict:
     input_path = Path(audio_path) if audio_path else None
     result_file = None
-    compute_type = settings.get_model_compute_type(model)
-    resolved_model_name = resolve_model_name(model)
+    selected_model: ModelTranscribeSize = model
     mark_task_started(process_transcription.request.id)
-    process_transcription.update_state(state="PROGRESS", meta={"progress": 0.0})
+    stage_progress: dict[str, float | None] = {
+        "transcription": 0.0,
+        "diarization": 0.0 if diarization else None,
+    }
+
+    def _emit_progress() -> None:
+        transcription_progress = float(stage_progress.get("transcription") or 0.0)
+        diarization_progress_raw = stage_progress.get("diarization")
+        diarization_progress = float(diarization_progress_raw or 0.0)
+
+        if diarization:
+            overall = (
+                transcription_progress * TRANSCRIPTION_WEIGHT
+                + diarization_progress * DIARIZATION_WEIGHT
+            )
+        else:
+            overall = transcription_progress
+
+        process_transcription.update_state(
+            state="PROGRESS",
+            meta={
+                "progress": round(overall, 1),
+                "progress_overall": round(overall, 1),
+                "progress_transcription": round(transcription_progress, 1),
+                "progress_diarization": (
+                    round(diarization_progress, 1)
+                    if diarization
+                    else None
+                ),
+            },
+        )
+
+    _emit_progress()
 
     parsed_vad_parameters = None
     if vad_parameters:
@@ -102,6 +202,11 @@ def process_transcription(
             raise ValueError("Не передан источник аудио: audio_path или source_url")
 
         source_filename = source_filename or input_path.name
+        
+        selected_model = _select_model_by_duration(model=model, audio_path=input_path)
+        
+        compute_type = settings.get_model_compute_type(selected_model)
+        resolved_model_name = resolve_model_name(selected_model)
 
         transcriber = transcriber_service.get_or_init(
             model_name=resolved_model_name,
@@ -112,6 +217,10 @@ def process_transcription(
             cpu_threads=settings.MODEL_CPU_THREADS,
             num_workers=settings.MODEL_NUM_WORKERS,
         )
+
+        def _transcription_progress(progress: float):
+            stage_progress["transcription"] = max(0.0, min(100.0, float(progress)))
+            _emit_progress()
 
         result = transcriber.transcribe(
             input_path,
@@ -149,23 +258,48 @@ def process_transcription(
             hotwords=hotwords,
             language_detection_threshold=language_detection_threshold,
             language_detection_segments=language_detection_segments,
-            on_progress=lambda progress: process_transcription.update_state(
-                state="PROGRESS",
-                meta={"progress": round(progress, 1)},
-            ),
+            on_progress=_transcription_progress,
         )
+        stage_progress["transcription"] = 100.0
+        _emit_progress()
+
+        if diarization:
+            from app.service.speaker_diarization import diary_service
+            from pyannote.audio.pipelines.utils.hook import ProgressHook
+
+            def _diarization_progress(progress: float):
+                stage_progress["diarization"] = max(0.0, min(100.0, float(progress)))
+                _emit_progress()
+
+            with ProgressHook() as active_hook:
+                diarization_result = diary_service.diarize(
+                    audio_path=input_path,
+                    model=diarization_model,
+                    hook=active_hook,
+                    num_speakers=num_speakers,
+                    min_speakers=min_speakers,
+                    max_speakers=max_speakers,
+                    on_progress=_diarization_progress,
+                )
+
+            result["diarization"] = diarization_result
+            stage_progress["diarization"] = 100.0
+            _emit_progress()
 
         if save_result:
             result_file = transcriber_service.export_result(
                 result=result,
                 source_filename=source_filename,
                 format=result_format,
+                export_timestamps=export_timestamps,
             )
             result["result_file"] = str(result_file)
             result["result_filename"] = result_file.name
+            result["download_url"] = f"/transcribe/get_result/{result_file.name}"
         else:
             result["result_file"] = None
             result["result_filename"] = None
+            result["download_url"] = None
 
         return result
     finally:

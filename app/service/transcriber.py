@@ -132,7 +132,8 @@ class TranscriberService:
         self,
         result: dict,
         source_filename: str,
-        format: ExportFormat = "docx"
+        format: ExportFormat = "docx",
+        export_timestamps: bool = False,
     ) -> Path:
         stem = Path(source_filename).stem[:20]
         timestamp = datetime.now().strftime("%d_%m_%Y_%H%M%S")
@@ -140,7 +141,12 @@ class TranscriberService:
         filename = f"{stem}_{timestamp}.{format}"
         path = settings.TRANSCRIBE_RESULTS_DIR / filename
 
-        return export_result(result, path, format)
+        return export_result(
+            result=result,
+            path=path,
+            format=format,
+            export_timestamps=export_timestamps,
+        )
 
 
 transcriber_service = TranscriberService()

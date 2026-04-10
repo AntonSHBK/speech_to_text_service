@@ -5,6 +5,8 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfgen import canvas
 
+from app.utils.exporters.common import build_speaker_blocks, format_timestamp
+
 PDF_FONT = "DejaVuSans"
 PDF_FONT_BOLD = "DejaVuSans-Bold"
 
@@ -34,8 +36,18 @@ def _register_pdf_fonts() -> tuple[str, str]:
     return "Helvetica", "Helvetica-Bold"
 
 
-def export_pdf(result: dict, path: Path) -> Path:
-    text = result.get("text", "") or ""
+def _part_to_chunk(part: dict, export_timestamps: bool) -> str:
+    text = str(part.get("text", "")).strip()
+    if not text:
+        return ""
+    if not export_timestamps:
+        return text
+    start = format_timestamp(part.get("start"))
+    end = format_timestamp(part.get("end"))
+    return f"[{start} - {end}] {text}"
+
+
+def export_pdf(result: dict, path: Path, export_timestamps: bool = False) -> Path:
     regular_font, bold_font = _register_pdf_fonts()
 
     pdf = canvas.Canvas(str(path), pagesize=A4)
@@ -49,12 +61,14 @@ def export_pdf(result: dict, path: Path) -> Path:
     y = page_height - top_margin
     line_height = 14
     font_size = 11
+    heading_size = 14
 
-    pdf.setFont(bold_font, 14)
-    pdf.drawString(left_margin, y, "Результат транскрибации")
-    y -= 28
-
-    pdf.setFont(regular_font, font_size)
+    def ensure_space(lines_count: int = 1) -> None:
+        nonlocal y
+        needed = line_height * lines_count
+        if y - needed <= bottom_margin:
+            pdf.showPage()
+            y = page_height - top_margin
 
     def split_long_token(token: str) -> list[str]:
         parts: list[str] = []
@@ -71,14 +85,13 @@ def export_pdf(result: dict, path: Path) -> Path:
             parts.append(current)
         return parts or [""]
 
-    def wrap_paragraph(paragraph: str) -> list[str]:
-        if not paragraph:
+    def wrap_text(text: str) -> list[str]:
+        if not text:
             return [""]
 
         wrapped: list[str] = []
         current = ""
-
-        for token in paragraph.split(" "):
+        for token in text.split(" "):
             candidate = token if not current else f"{current} {token}"
             if pdfmetrics.stringWidth(candidate, regular_font, font_size) <= content_width:
                 current = candidate
@@ -99,16 +112,50 @@ def export_pdf(result: dict, path: Path) -> Path:
             wrapped.append(current)
         return wrapped or [""]
 
-    for paragraph in text.splitlines() or [""]:
-        lines = wrap_paragraph(paragraph)
+    def draw_paragraph(text: str) -> None:
+        nonlocal y
+        lines = wrap_text(text)
         for line in lines:
-            if y <= bottom_margin:
-                pdf.showPage()
-                pdf.setFont(regular_font, font_size)
-                y = page_height - top_margin
+            ensure_space(1)
+            pdf.setFont(regular_font, font_size)
             pdf.drawString(left_margin, y, line)
             y -= line_height
         y -= 4
+
+    pdf.setFont(bold_font, heading_size)
+    pdf.drawString(left_margin, y, "Результат транскрибации")
+    y -= 28
+
+    blocks = build_speaker_blocks(result)
+    if blocks:
+        has_speakers = any(block.get("speaker") for block in blocks)
+        if has_speakers:
+            for block in blocks:
+                speaker = block.get("speaker")
+                parts = block.get("parts") or []
+                chunks = [_part_to_chunk(part, export_timestamps) for part in parts]
+                chunks = [chunk for chunk in chunks if chunk]
+                if not chunks:
+                    continue
+
+                if speaker:
+                    ensure_space(1)
+                    pdf.setFont(bold_font, font_size)
+                    pdf.drawString(left_margin, y, f"{speaker}:")
+                    y -= line_height
+
+                draw_paragraph(" ".join(chunks))
+        else:
+            chunks: list[str] = []
+            for block in blocks:
+                for part in block.get("parts") or []:
+                    chunk = _part_to_chunk(part, export_timestamps)
+                    if chunk:
+                        chunks.append(chunk)
+            if chunks:
+                draw_paragraph(" ".join(chunks))
+    else:
+        draw_paragraph(result.get("text", "") or "")
 
     pdf.save()
     return path
