@@ -1,4 +1,0 @@
-﻿# GPU wheels for PyTorch ecosystem (CUDA 12.6)
-torch==2.10.0 --index-url https://download.pytorch.org/whl/cu126
-torchaudio==2.10.0 --index-url https://download.pytorch.org/whl/cu126
-torchcodec==0.10.*
