@@ -5,7 +5,7 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfgen import canvas
 
-from app.utils.exporters.common import build_speaker_blocks, format_timestamp
+from app.utils.exporters.common import build_paragraph_blocks, format_timestamp
 
 PDF_FONT = "DejaVuSans"
 PDF_FONT_BOLD = "DejaVuSans-Bold"
@@ -126,34 +126,25 @@ def export_pdf(result: dict, path: Path, export_timestamps: bool = False) -> Pat
     pdf.drawString(left_margin, y, "Результат транскрибации")
     y -= 28
 
-    blocks = build_speaker_blocks(result)
+    blocks = build_paragraph_blocks(result, pause_sec=2.0)
     if blocks:
-        has_speakers = any(block.get("speaker") for block in blocks)
-        if has_speakers:
-            for block in blocks:
-                speaker = block.get("speaker")
-                parts = block.get("parts") or []
-                chunks = [_part_to_chunk(part, export_timestamps) for part in parts]
-                chunks = [chunk for chunk in chunks if chunk]
-                if not chunks:
-                    continue
+        prev_speaker: str | None = None
+        for block in blocks:
+            speaker = block.get("speaker")
+            parts = block.get("parts") or []
+            chunks = [_part_to_chunk(part, export_timestamps) for part in parts]
+            chunks = [chunk for chunk in chunks if chunk]
+            if not chunks:
+                continue
 
-                if speaker:
-                    ensure_space(1)
-                    pdf.setFont(bold_font, font_size)
-                    pdf.drawString(left_margin, y, f"{speaker}:")
-                    y -= line_height
+            if speaker and speaker != prev_speaker:
+                ensure_space(1)
+                pdf.setFont(bold_font, font_size)
+                pdf.drawString(left_margin, y, f"{speaker}:")
+                y -= line_height
 
-                draw_paragraph(" ".join(chunks))
-        else:
-            chunks: list[str] = []
-            for block in blocks:
-                for part in block.get("parts") or []:
-                    chunk = _part_to_chunk(part, export_timestamps)
-                    if chunk:
-                        chunks.append(chunk)
-            if chunks:
-                draw_paragraph(" ".join(chunks))
+            draw_paragraph(" ".join(chunks))
+            prev_speaker = speaker if isinstance(speaker, str) else None
     else:
         draw_paragraph(result.get("text", "") or "")
 

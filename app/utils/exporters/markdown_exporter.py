@@ -1,9 +1,9 @@
 from pathlib import Path
 
-from app.utils.exporters.common import build_speaker_blocks, format_timestamp
+from app.utils.exporters.common import build_paragraph_blocks, format_timestamp
 
 
-def _render_block(block: dict, export_timestamps: bool) -> str:
+def _render_block(block: dict, export_timestamps: bool, show_speaker: bool = True) -> str:
     speaker = block.get("speaker")
     parts = block.get("parts") or []
 
@@ -23,19 +23,29 @@ def _render_block(block: dict, export_timestamps: bool) -> str:
         return ""
 
     content = " ".join(chunks)
-    if speaker:
+    if speaker and show_speaker:
         return f"### {speaker}\n{content}"
     return content
 
 
 def export_markdown(result: dict, path: Path, export_timestamps: bool = False) -> Path:
-    blocks = build_speaker_blocks(result)
+    blocks = build_paragraph_blocks(result, pause_sec=2.0)
     if blocks:
-        has_speakers = any(block.get("speaker") for block in blocks)
-        rendered_blocks = [_render_block(block, export_timestamps) for block in blocks]
+        rendered_blocks: list[str] = []
+        prev_speaker: str | None = None
+        for block in blocks:
+            speaker = block.get("speaker")
+            rendered = _render_block(
+                block,
+                export_timestamps,
+                show_speaker=(speaker != prev_speaker),
+            )
+            if rendered:
+                rendered_blocks.append(rendered)
+            prev_speaker = speaker if isinstance(speaker, str) else None
         rendered_blocks = [block for block in rendered_blocks if block]
         if rendered_blocks:
-            separator = "\n\n" if has_speakers else " "
+            separator = "\n\n"
             content = "# Результат транскрибации\n\n" + separator.join(rendered_blocks)
             path.write_text(content, encoding="utf-8")
             return path

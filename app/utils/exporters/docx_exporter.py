@@ -4,7 +4,7 @@ from docx import Document
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.shared import Pt
 
-from app.utils.exporters.common import build_speaker_blocks, format_timestamp
+from app.utils.exporters.common import build_paragraph_blocks, format_timestamp
 
 
 def _configure_paragraph(paragraph) -> None:
@@ -26,14 +26,19 @@ def _part_to_chunk(part: dict, export_timestamps: bool) -> str:
     return f"[{start} - {end}] {text}"
 
 
-def _append_block_paragraph(document: Document, block: dict, export_timestamps: bool) -> None:
+def _append_block_paragraph(
+    document: Document,
+    block: dict,
+    export_timestamps: bool,
+    show_speaker: bool = True,
+) -> None:
     parts = block.get("parts") or []
     speaker = block.get("speaker")
 
     paragraph = document.add_paragraph()
     _configure_paragraph(paragraph)
 
-    if speaker:
+    if speaker and show_speaker:
         speaker_run = paragraph.add_run(f"{speaker}: ")
         speaker_run.bold = True
 
@@ -54,21 +59,18 @@ def export_docx(result: dict, path: Path, export_timestamps: bool = False) -> Pa
     heading = document.add_heading("Результат транскрибации", level=1)
     heading.alignment = WD_ALIGN_PARAGRAPH.CENTER
 
-    blocks = build_speaker_blocks(result)
+    blocks = build_paragraph_blocks(result, pause_sec=2.0)
     if blocks:
-        has_speakers = any(block.get("speaker") for block in blocks)
-        if has_speakers:
-            for block in blocks:
-                _append_block_paragraph(document, block, export_timestamps=export_timestamps)
-        else:
-            merged_parts: list[dict] = []
-            for block in blocks:
-                merged_parts.extend(block.get("parts") or [])
+        prev_speaker: str | None = None
+        for block in blocks:
+            speaker = block.get("speaker")
             _append_block_paragraph(
                 document,
-                {"speaker": None, "parts": merged_parts},
+                block,
                 export_timestamps=export_timestamps,
+                show_speaker=(speaker != prev_speaker),
             )
+            prev_speaker = speaker if isinstance(speaker, str) else None
     else:
         paragraph = document.add_paragraph(result.get("text", "") or "")
         _configure_paragraph(paragraph)

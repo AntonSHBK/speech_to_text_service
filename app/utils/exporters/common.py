@@ -107,3 +107,79 @@ def build_speaker_blocks(result: dict) -> list[dict[str, Any]]:
             }
         )
     return blocks
+
+
+def _split_parts_by_pause(
+    parts: list[dict[str, Any]],
+    pause_sec: float,
+) -> list[list[dict[str, Any]]]:
+    paragraphs: list[list[dict[str, Any]]] = []
+    current: list[dict[str, Any]] = []
+    prev_end: float | None = None
+
+    for part in parts:
+        if not isinstance(part, dict):
+            continue
+
+        text = str(part.get("text", "")).strip()
+        if not text:
+            continue
+
+        start_raw = part.get("start")
+        end_raw = part.get("end")
+        start = float(start_raw) if isinstance(start_raw, (int, float)) else None
+        end = float(end_raw) if isinstance(end_raw, (int, float)) else None
+
+        should_split = (
+            bool(current)
+            and start is not None
+            and prev_end is not None
+            and (start - prev_end) > pause_sec
+        )
+        if should_split:
+            paragraphs.append(current)
+            current = []
+
+        normalized_part: dict[str, Any] = {
+            "start": start_raw,
+            "end": end_raw,
+            "text": text,
+        }
+        current.append(normalized_part)
+        if end is not None:
+            prev_end = end
+
+    if current:
+        paragraphs.append(current)
+    return paragraphs
+
+
+def build_paragraph_blocks(result: dict, pause_sec: float = 2.0) -> list[dict[str, Any]]:
+    """
+    Строит блоки-абзацы по паузе между сегментами.
+    - Если спикеры есть: разбиение выполняется внутри каждого спикера.
+    - Если спикеров нет: разбиение выполняется по общей последовательности сегментов.
+    """
+    speaker_blocks = build_speaker_blocks(result)
+    if not speaker_blocks:
+        return []
+
+    has_speakers = any(block.get("speaker") for block in speaker_blocks)
+    paragraph_blocks: list[dict[str, Any]] = []
+
+    if has_speakers:
+        for block in speaker_blocks:
+            speaker = block.get("speaker")
+            parts = block.get("parts") or []
+            for paragraph_parts in _split_parts_by_pause(parts, pause_sec=pause_sec):
+                paragraph_blocks.append({"speaker": speaker, "parts": paragraph_parts})
+        return paragraph_blocks
+
+    all_parts: list[dict[str, Any]] = []
+    for block in speaker_blocks:
+        all_parts.extend(block.get("parts") or [])
+
+    for paragraph_parts in _split_parts_by_pause(all_parts, pause_sec=pause_sec):
+        paragraph_blocks.append({"speaker": None, "parts": paragraph_parts})
+
+    return paragraph_blocks
