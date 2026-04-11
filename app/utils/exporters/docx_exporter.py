@@ -58,7 +58,7 @@ def export_docx(
     path: Path,
     export_timestamps: bool = False,
     paragraph_pause_sec: float = 2.0,
-    paragraph_max_chars: int = 300,
+    paragraph_max_chars: int = 350,
 ) -> Path:
     document = Document()
 

@@ -135,7 +135,7 @@ class TranscriberService:
         format: ExportFormat = "docx",
         export_timestamps: bool = False,
         paragraph_pause_sec: float = 2.0,
-        paragraph_max_chars: int = 300,
+        paragraph_max_chars: int = 350,
     ) -> Path:
         stem = Path(source_filename).stem[:20]
         timestamp = datetime.now().strftime("%d_%m_%Y_%H%M%S")

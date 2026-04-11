@@ -114,6 +114,39 @@ def _split_parts_by_pause(
     pause_sec: float,
     max_chars: int,
 ) -> list[list[dict[str, Any]]]:
+    sentence_endings = ".!?…"
+
+    def _ends_with_sentence_punctuation(text: str) -> bool:
+        stripped = text.rstrip()
+        if not stripped:
+            return False
+        tail = stripped.rstrip("\"'”»)]}")
+        return bool(tail) and tail[-1] in sentence_endings
+
+    def _starts_with_upper(text: str) -> bool:
+        stripped = text.lstrip()
+        if not stripped:
+            return False
+        for ch in stripped:
+            if ch.isalpha():
+                return ch.isupper()
+        return False
+
+    def _is_sentence_boundary(prev_text: str, next_text: str) -> bool:
+        return _ends_with_sentence_punctuation(prev_text) or _starts_with_upper(next_text)
+
+    def _parts_len(items: list[dict[str, Any]]) -> int:
+        length = 0
+        for item in items:
+            text_item = str(item.get("text", "")).strip()
+            if not text_item:
+                continue
+            if length == 0:
+                length = len(text_item)
+            else:
+                length += 1 + len(text_item)
+        return length
+
     paragraphs: list[list[dict[str, Any]]] = []
     current: list[dict[str, Any]] = []
     current_len = 0
@@ -145,9 +178,31 @@ def _split_parts_by_pause(
             current = []
             current_len = 0
         elif should_split_by_len:
-            paragraphs.append(current)
-            current = []
-            current_len = 0
+            prev_text = str(current[-1].get("text", "")).strip() if current else ""
+
+            # Наиболее естественная граница: конец текущей части или начало новой с заглавной.
+            if current and _is_sentence_boundary(prev_text, text):
+                paragraphs.append(current)
+                current = []
+                current_len = 0
+            else:
+                # Ищем последнюю естественную границу внутри текущего абзаца.
+                split_idx = None
+                for idx in range(len(current) - 2, -1, -1):
+                    left_text = str(current[idx].get("text", "")).strip()
+                    right_text = str(current[idx + 1].get("text", "")).strip()
+                    if _is_sentence_boundary(left_text, right_text):
+                        split_idx = idx + 1
+                        break
+
+                if split_idx is not None:
+                    paragraphs.append(current[:split_idx])
+                    current = current[split_idx:]
+                    current_len = _parts_len(current)
+                else:
+                    # Fallback: если естественной границы нет, не рвём середину текущего
+                    # и переносим разрыв на ближайшую будущую естественную границу.
+                    pass
 
         normalized_part: dict[str, Any] = {
             "start": start_raw,
@@ -170,7 +225,7 @@ def _split_parts_by_pause(
 def build_paragraph_blocks(
     result: dict,
     pause_sec: float = 2.0,
-    max_chars: int = 300,
+    max_chars: int = 350,
 ) -> list[dict[str, Any]]:
     """
     Строит блоки-абзацы по паузе между сегментами.

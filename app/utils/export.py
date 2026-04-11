@@ -14,8 +14,8 @@ def export_result(
     path: Path,
     format: ExportFormat,
     export_timestamps: bool = False,
-    paragraph_pause_sec: float = 1.0,
-    paragraph_max_chars: int = 300,
+    paragraph_pause_sec: float = 1.5,
+    paragraph_max_chars: int = 350,
 ) -> Path:
     match format:
         case "docx":
