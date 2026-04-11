@@ -47,7 +47,13 @@ def _part_to_chunk(part: dict, export_timestamps: bool) -> str:
     return f"[{start} - {end}] {text}"
 
 
-def export_pdf(result: dict, path: Path, export_timestamps: bool = False) -> Path:
+def export_pdf(
+    result: dict,
+    path: Path,
+    export_timestamps: bool = False,
+    paragraph_pause_sec: float = 2.0,
+    paragraph_max_chars: int = 300,
+) -> Path:
     regular_font, bold_font = _register_pdf_fonts()
 
     pdf = canvas.Canvas(str(path), pagesize=A4)
@@ -126,7 +132,11 @@ def export_pdf(result: dict, path: Path, export_timestamps: bool = False) -> Pat
     pdf.drawString(left_margin, y, "Результат транскрибации")
     y -= 28
 
-    blocks = build_paragraph_blocks(result, pause_sec=2.0)
+    blocks = build_paragraph_blocks(
+        result,
+        pause_sec=paragraph_pause_sec,
+        max_chars=paragraph_max_chars,
+    )
     if blocks:
         prev_speaker: str | None = None
         for block in blocks:

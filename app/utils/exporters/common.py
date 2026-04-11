@@ -112,9 +112,11 @@ def build_speaker_blocks(result: dict) -> list[dict[str, Any]]:
 def _split_parts_by_pause(
     parts: list[dict[str, Any]],
     pause_sec: float,
+    max_chars: int,
 ) -> list[list[dict[str, Any]]]:
     paragraphs: list[list[dict[str, Any]]] = []
     current: list[dict[str, Any]] = []
+    current_len = 0
     prev_end: float | None = None
 
     for part in parts:
@@ -136,9 +138,16 @@ def _split_parts_by_pause(
             and prev_end is not None
             and (start - prev_end) > pause_sec
         )
+        text_len = len(text)
+        should_split_by_len = bool(current) and (current_len + 1 + text_len) > max_chars
         if should_split:
             paragraphs.append(current)
             current = []
+            current_len = 0
+        elif should_split_by_len:
+            paragraphs.append(current)
+            current = []
+            current_len = 0
 
         normalized_part: dict[str, Any] = {
             "start": start_raw,
@@ -146,6 +155,10 @@ def _split_parts_by_pause(
             "text": text,
         }
         current.append(normalized_part)
+        if current_len == 0:
+            current_len = text_len
+        else:
+            current_len += 1 + text_len
         if end is not None:
             prev_end = end
 
@@ -154,7 +167,11 @@ def _split_parts_by_pause(
     return paragraphs
 
 
-def build_paragraph_blocks(result: dict, pause_sec: float = 2.0) -> list[dict[str, Any]]:
+def build_paragraph_blocks(
+    result: dict,
+    pause_sec: float = 2.0,
+    max_chars: int = 300,
+) -> list[dict[str, Any]]:
     """
     Строит блоки-абзацы по паузе между сегментами.
     - Если спикеры есть: разбиение выполняется внутри каждого спикера.
@@ -171,7 +188,11 @@ def build_paragraph_blocks(result: dict, pause_sec: float = 2.0) -> list[dict[st
         for block in speaker_blocks:
             speaker = block.get("speaker")
             parts = block.get("parts") or []
-            for paragraph_parts in _split_parts_by_pause(parts, pause_sec=pause_sec):
+            for paragraph_parts in _split_parts_by_pause(
+                parts,
+                pause_sec=pause_sec,
+                max_chars=max_chars,
+            ):
                 paragraph_blocks.append({"speaker": speaker, "parts": paragraph_parts})
         return paragraph_blocks
 
@@ -179,7 +200,11 @@ def build_paragraph_blocks(result: dict, pause_sec: float = 2.0) -> list[dict[st
     for block in speaker_blocks:
         all_parts.extend(block.get("parts") or [])
 
-    for paragraph_parts in _split_parts_by_pause(all_parts, pause_sec=pause_sec):
+    for paragraph_parts in _split_parts_by_pause(
+        all_parts,
+        pause_sec=pause_sec,
+        max_chars=max_chars,
+    ):
         paragraph_blocks.append({"speaker": None, "parts": paragraph_parts})
 
     return paragraph_blocks

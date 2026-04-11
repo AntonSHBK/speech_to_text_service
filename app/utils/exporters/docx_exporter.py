@@ -53,13 +53,23 @@ def _append_block_paragraph(
         first_chunk = False
 
 
-def export_docx(result: dict, path: Path, export_timestamps: bool = False) -> Path:
+def export_docx(
+    result: dict,
+    path: Path,
+    export_timestamps: bool = False,
+    paragraph_pause_sec: float = 2.0,
+    paragraph_max_chars: int = 300,
+) -> Path:
     document = Document()
 
     heading = document.add_heading("Результат транскрибации", level=1)
     heading.alignment = WD_ALIGN_PARAGRAPH.CENTER
 
-    blocks = build_paragraph_blocks(result, pause_sec=2.0)
+    blocks = build_paragraph_blocks(
+        result,
+        pause_sec=paragraph_pause_sec,
+        max_chars=paragraph_max_chars,
+    )
     if blocks:
         prev_speaker: str | None = None
         for block in blocks:

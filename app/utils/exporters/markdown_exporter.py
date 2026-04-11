@@ -28,8 +28,18 @@ def _render_block(block: dict, export_timestamps: bool, show_speaker: bool = Tru
     return content
 
 
-def export_markdown(result: dict, path: Path, export_timestamps: bool = False) -> Path:
-    blocks = build_paragraph_blocks(result, pause_sec=2.0)
+def export_markdown(
+    result: dict,
+    path: Path,
+    export_timestamps: bool = False,
+    paragraph_pause_sec: float = 2.0,
+    paragraph_max_chars: int = 300,
+) -> Path:
+    blocks = build_paragraph_blocks(
+        result,
+        pause_sec=paragraph_pause_sec,
+        max_chars=paragraph_max_chars,
+    )
     if blocks:
         rendered_blocks: list[str] = []
         prev_speaker: str | None = None

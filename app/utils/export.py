@@ -14,15 +14,41 @@ def export_result(
     path: Path,
     format: ExportFormat,
     export_timestamps: bool = False,
+    paragraph_pause_sec: float = 1.0,
+    paragraph_max_chars: int = 300,
 ) -> Path:
     match format:
         case "docx":
-            return export_docx(result, path, export_timestamps=export_timestamps)
+            return export_docx(
+                result,
+                path,
+                export_timestamps=export_timestamps,
+                paragraph_pause_sec=paragraph_pause_sec,
+                paragraph_max_chars=paragraph_max_chars,
+            )
         case "txt":
-            return export_txt(result, path, export_timestamps=export_timestamps)
+            return export_txt(
+                result,
+                path,
+                export_timestamps=export_timestamps,
+                paragraph_pause_sec=paragraph_pause_sec,
+                paragraph_max_chars=paragraph_max_chars,
+            )
         case "md":
-            return export_markdown(result, path, export_timestamps=export_timestamps)
+            return export_markdown(
+                result,
+                path,
+                export_timestamps=export_timestamps,
+                paragraph_pause_sec=paragraph_pause_sec,
+                paragraph_max_chars=paragraph_max_chars,
+            )
         case "pdf":
-            return export_pdf(result, path, export_timestamps=export_timestamps)
+            return export_pdf(
+                result,
+                path,
+                export_timestamps=export_timestamps,
+                paragraph_pause_sec=paragraph_pause_sec,
+                paragraph_max_chars=paragraph_max_chars,
+            )
         case _:
             raise ValueError(f"Unsupported export format: {format}")

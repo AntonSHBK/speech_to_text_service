@@ -29,8 +29,18 @@ def _build_merged_speaker_line(
     return " ".join(chunks)
 
 
-def export_txt(result: dict, path: Path, export_timestamps: bool = False) -> Path:
-    blocks = build_paragraph_blocks(result, pause_sec=2.0)
+def export_txt(
+    result: dict,
+    path: Path,
+    export_timestamps: bool = False,
+    paragraph_pause_sec: float = 2.0,
+    paragraph_max_chars: int = 300,
+) -> Path:
+    blocks = build_paragraph_blocks(
+        result,
+        pause_sec=paragraph_pause_sec,
+        max_chars=paragraph_max_chars,
+    )
     if blocks:
         lines: list[str] = []
         prev_speaker: str | None = None
