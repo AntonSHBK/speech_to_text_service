@@ -2,7 +2,7 @@ from pathlib import Path
 
 from docx import Document
 from docx.enum.text import WD_ALIGN_PARAGRAPH
-from docx.shared import Pt
+from docx.shared import Pt, Cm
 
 from app.utils.exporters.common import build_paragraph_blocks, format_timestamp
 
@@ -11,6 +11,7 @@ def _configure_paragraph(paragraph) -> None:
     paragraph.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
     paragraph_format = paragraph.paragraph_format
     paragraph_format.line_spacing = 1.25
+    paragraph_format.first_line_indent = Cm(1.5)
     paragraph_format.space_after = Pt(6)
     paragraph_format.space_before = Pt(6)
 
