@@ -1,6 +1,7 @@
 ﻿from pathlib import Path
 import json
 import torchaudio
+import subprocess
 
 from celery.signals import worker_process_init
 
@@ -20,6 +21,32 @@ DIARIZATION_WEIGHT = 0.50
 
 
 def _probe_media_duration_seconds(audio_path: Path) -> float | None:
+    def _probe_with_ffprobe() -> float | None:
+        try:
+            completed = subprocess.run(
+                [
+                    "ffprobe",
+                    "-v",
+                    "error",
+                    "-show_entries",
+                    "format=duration",
+                    "-of",
+                    "default=noprint_wrappers=1:nokey=1",
+                    str(audio_path),
+                ],
+                capture_output=True,
+                text=True,
+                check=True,
+                timeout=15,
+            )
+            raw = (completed.stdout or "").strip()
+            if not raw:
+                return None
+            duration = float(raw)
+            return duration if duration > 0 else None
+        except Exception:
+            return None
+
     try:
         if hasattr(torchaudio, "info"):
             info = torchaudio.info(str(audio_path))
@@ -31,14 +58,24 @@ def _probe_media_duration_seconds(audio_path: Path) -> float | None:
             num_frames = int(waveform.shape[-1]) if waveform is not None else 0
 
         if sample_rate <= 0 or num_frames <= 0:
-            return None
+            raise RuntimeError("torchaudio вернул пустые метаданные")
+
         duration = float(num_frames) / float(sample_rate)
         if duration <= 0:
-            return None
+            raise RuntimeError("torchaudio вернул неположительную длительность")
         return duration
     except Exception as exc:
+        fallback_duration = _probe_with_ffprobe()
+        if fallback_duration is not None:
+            logger.info(
+                "Длительность определена через ffprobe (fallback): %.3f c | файл=%s",
+                fallback_duration,
+                audio_path,
+            )
+            return fallback_duration
+
         logger.warning(
-            "Не удалось определить длительность медиа через torchaudio: %s | файл=%s",
+            "Не удалось определить длительность медиа через torchaudio/ffprobe: %s | файл=%s",
             exc,
             audio_path,
         )
