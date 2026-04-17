@@ -48,8 +48,10 @@ def _probe_media_duration_seconds(audio_path: Path) -> float | None:
 def _select_model_by_duration(
     model: ModelTranscribeSize,
     audio_path: Path,
+    duration: float | None = None,
 ) -> ModelTranscribeSize:
-    duration = _probe_media_duration_seconds(audio_path)
+    if duration is None:
+        duration = _probe_media_duration_seconds(audio_path)
     if duration is None:
         logger.info(
             "Автовыбор модели пропущен (длительность не определена), используем модель из запроса: %s",
@@ -204,8 +206,14 @@ def process_transcription(
             raise ValueError("Не передан источник аудио: audio_path или source_url")
 
         source_filename = source_filename or input_path.name
-        
-        selected_model = _select_model_by_duration(model=model, audio_path=input_path)
+
+        media_duration_sec = _probe_media_duration_seconds(input_path)
+        _emit_progress()
+        selected_model = _select_model_by_duration(
+            model=model,
+            audio_path=input_path,
+            duration=media_duration_sec,
+        )
         
         compute_type = settings.get_model_compute_type(selected_model)
         resolved_model_name = resolve_model_name(selected_model)
