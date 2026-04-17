@@ -642,6 +642,7 @@ def get_transcription_status(task_id: str):
     progress_overall = meta.get("progress_overall", progress)
     progress_transcription = meta.get("progress_transcription")
     progress_diarization = meta.get("progress_diarization")
+    media_duration_sec = meta.get("media_duration_sec")
 
     if result.state == "FAILURE":
         return {
@@ -652,10 +653,16 @@ def get_transcription_status(task_id: str):
             "progress_overall": progress_overall,
             "progress_transcription": progress_transcription,
             "progress_diarization": progress_diarization,
+            "media_duration_sec": media_duration_sec,
             "error": str(result.result),
         }
 
     if result.state == "SUCCESS":
+        success_duration = None
+        if isinstance(result.result, dict):
+            raw_duration = result.result.get("media_duration_sec", result.result.get("duration"))
+            if isinstance(raw_duration, (int, float)):
+                success_duration = float(raw_duration)
         return {
             "task_id": task_id,
             "status": "done",
@@ -666,6 +673,7 @@ def get_transcription_status(task_id: str):
             "progress_diarization": (
                 100.0 if isinstance(result.result, dict) and "diarization" in result.result else None
             ),
+            "media_duration_sec": success_duration,
             "result": result.result,
         }
 
@@ -689,6 +697,7 @@ def get_transcription_status(task_id: str):
         "progress_overall": progress_overall,
         "progress_transcription": progress_transcription,
         "progress_diarization": progress_diarization,
+        "media_duration_sec": media_duration_sec,
     }
 
 

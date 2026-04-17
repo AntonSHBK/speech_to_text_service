@@ -149,6 +149,7 @@ def process_transcription(
 ) -> dict:
     input_path = Path(audio_path) if audio_path else None
     result_file = None
+    media_duration_sec: float | None = None
     selected_model: ModelTranscribeSize = model
     mark_task_started(process_transcription.request.id)
     stage_progress: dict[str, float | None] = {
@@ -180,6 +181,7 @@ def process_transcription(
                     if diarization
                     else None
                 ),
+                "media_duration_sec": media_duration_sec,
             },
         )
 
@@ -260,6 +262,10 @@ def process_transcription(
             language_detection_segments=language_detection_segments,
             on_progress=_transcription_progress,
         )
+        result_duration = result.get("duration")
+        if isinstance(result_duration, (int, float)):
+            media_duration_sec = float(result_duration)
+            result["media_duration_sec"] = media_duration_sec
         stage_progress["transcription"] = 100.0
         _emit_progress()
 
