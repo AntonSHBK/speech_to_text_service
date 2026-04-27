@@ -1,16 +1,17 @@
+﻿import gc
 import tempfile
 import uuid
-import gc
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
+import torch
 from fastapi import UploadFile
 
-from app.settings import settings
-from app.utils.export import export_result, ExportFormat
-from app.utils.logging import get_logger
 from app.models.transcriber import FastWhisperTranscriber
+from app.settings import settings
+from app.utils.export import ExportFormat, export_result
+from app.utils.logging import get_logger
 
 
 class TranscriberService:
@@ -33,6 +34,14 @@ class TranscriberService:
             )
             self.transcriber = None
             gc.collect()
+
+            if torch.cuda.is_available():
+                try:
+                    torch.cuda.empty_cache()
+                    if hasattr(torch.cuda, "ipc_collect"):
+                        torch.cuda.ipc_collect()
+                except Exception:
+                    pass
 
         self.logger.info("Загружаем модель: %s", model_name)
         transcriber = FastWhisperTranscriber(**kwargs)
@@ -58,12 +67,31 @@ class TranscriberService:
             self.logger.info("Используется уже загруженная модель: %s", model_name)
             return self.transcriber
         return self.init(**kwargs)
-    
+
+    def release(self) -> None:
+        if self.transcriber is None:
+            return
+
+        model_name = self.current_model_name
+        self.transcriber = None
+        self.current_model_name = None
+        gc.collect()
+
+        if torch.cuda.is_available():
+            try:
+                torch.cuda.empty_cache()
+                if hasattr(torch.cuda, "ipc_collect"):
+                    torch.cuda.ipc_collect()
+            except Exception:
+                pass
+
+        self.logger.info("Модель выгружена из памяти: %s", model_name)
+
     def prepare_audio(
-        self, 
-        raw_bytes: bytes, 
-        filename: str, 
-        save_source: bool
+        self,
+        raw_bytes: bytes,
+        filename: str,
+        save_source: bool,
     ) -> Path:
         original = Path(filename)
 
@@ -81,9 +109,9 @@ class TranscriberService:
             return path
 
         tmp = tempfile.NamedTemporaryFile(
-            delete=False, 
+            delete=False,
             suffix=suffix,
-            dir=settings.AUDIO_DIR
+            dir=settings.AUDIO_DIR,
         )
         tmp.write(raw_bytes)
         tmp.flush()
@@ -127,7 +155,7 @@ class TranscriberService:
                     break
                 tmp.write(chunk)
         return Path(tmp.name)
-    
+
     def export_result(
         self,
         result: dict,

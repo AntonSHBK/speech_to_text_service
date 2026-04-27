@@ -40,12 +40,13 @@ class Settings(BaseSettings):
     
     USE_INTERFACE: bool = False
     
-    MODEL_CPU_THREADS: int = 2
-    MODEL_NUM_WORKERS: int = 4
+    MODEL_CPU_THREADS: int = 0
+    MODEL_NUM_CPU_WORKERS: int = 1
     MODEL_COMPUTE_TYPE: ModelComputeType = "default"
     MODEL_COMPUTE_TYPE_SMALL: ModelComputeType = "default"
     MODEL_COMPUTE_TYPE_MEDIUM: ModelComputeType = "default"
     MODEL_COMPUTE_TYPE_LARGE: ModelComputeType = "default"
+    RELEASE_MODELS_ON_IDLE: bool = True
 
     CELERY_BROKER_URL: str = "redis://localhost:6379/0"
     CELERY_RESULT_BACKEND: str = "redis://localhost:6379/0"

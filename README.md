@@ -35,7 +35,7 @@ Key inference settings:
 ```env
 DEVICE=cpu
 MODEL_CPU_THREADS=8
-MODEL_NUM_WORKERS=1
+MODEL_NUM_CPU_WORKERS=1
 
 # Global fallback compute type
 MODEL_COMPUTE_TYPE=default

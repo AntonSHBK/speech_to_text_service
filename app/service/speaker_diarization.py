@@ -2,6 +2,8 @@
 from pathlib import Path
 from typing import Any, Callable, Optional
 
+import torch
+
 from app.models.catalog import ModelDiarizationType, resolve_speaker_diarization_model_name
 from app.models.speaker_diarization import SpeakerDiarizationModel
 from app.settings import settings
@@ -23,17 +25,25 @@ class SpeakerDiarizationService:
         model_name = resolve_speaker_diarization_model_name(model)
 
         if self.diarizer and self.current_model_name == model_name:
-            self.logger.info("Diarization model already active: %s", model_name)
+            self.logger.info("Модель diarization уже активна: %s", model_name)
             return self.diarizer
 
         if self.diarizer is not None:
             self.logger.info(
-                "Switching diarization model: %s -> %s. Releasing previous model.",
+                "Переключение модели diarization: %s -> %s. Выгружаем предыдущую модель.",
                 self.current_model_name,
                 model_name,
             )
             self.diarizer = None
             gc.collect()
+
+            if torch.cuda.is_available():
+                try:
+                    torch.cuda.empty_cache()
+                    if hasattr(torch.cuda, "ipc_collect"):
+                        torch.cuda.ipc_collect()
+                except Exception:
+                    pass
 
         diarizer = SpeakerDiarizationModel(
             model_name=model_name,
@@ -42,7 +52,7 @@ class SpeakerDiarizationService:
         )
         self.diarizer = diarizer
         self.current_model_name = model_name
-        self.logger.info("Diarization model activated: %s", model_name)
+        self.logger.info("Модель diarization активирована: %s", model_name)
         return diarizer
 
     def get_or_init(
@@ -55,6 +65,25 @@ class SpeakerDiarizationService:
         if self.diarizer and self.current_model_name == model_name:
             return self.diarizer
         return self.init(model=model, device=device, token=token)
+
+    def release(self) -> None:
+        if self.diarizer is None:
+            return
+
+        model_name = self.current_model_name
+        self.diarizer = None
+        self.current_model_name = None
+        gc.collect()
+
+        if torch.cuda.is_available():
+            try:
+                torch.cuda.empty_cache()
+                if hasattr(torch.cuda, "ipc_collect"):
+                    torch.cuda.ipc_collect()
+            except Exception:
+                pass
+
+        self.logger.info("Модель diarization выгружена из памяти: %s", model_name)
 
     def diarize(
         self,

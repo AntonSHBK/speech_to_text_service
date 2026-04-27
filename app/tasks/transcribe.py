@@ -101,11 +101,11 @@ def _select_model_by_duration(
     # 1 минута .. 1 час -> medium
     # > 1 часа -> small
     if duration < 60:
-        selected_model: ModelTranscribeSize = "small"
+        selected_model: ModelTranscribeSize = "medium"
     elif duration <= 3600:
-        selected_model = "medium"
+        selected_model = "large"
     else:
-        selected_model = "small"
+        selected_model = "medium"
 
     logger.info(
         "Автовыбор модели по длительности | файл=%s | длительность=%.2fs | модель_запроса=%s | модель_выбрана=%s",
@@ -119,7 +119,11 @@ def _select_model_by_duration(
 
 @worker_process_init.connect
 def init_transcriber_worker(**kwargs):
-    default_model_key: ModelTranscribeSize = "medium"
+    if settings.RELEASE_MODELS_ON_IDLE:
+        logger.info("Предзагрузка моделей отключена. Модели будут загружаться по требованию задачи.")
+        return
+
+    default_model_key: ModelTranscribeSize = "large"
     default_model_name = resolve_model_name(default_model_key)
     compute_type = settings.get_model_compute_type(default_model_key)
     logger.info("Начинается инициализация модели по умолчанию: %s", default_model_name)
@@ -130,10 +134,10 @@ def init_transcriber_worker(**kwargs):
         token=settings.HF_TOKEN,
         compute_type=compute_type,
         cpu_threads=settings.MODEL_CPU_THREADS,
-        num_workers=settings.MODEL_NUM_WORKERS,
+        num_workers=settings.MODEL_NUM_CPU_WORKERS,
     )
     logger.info("Инициализация модели по умолчанию завершена: %s", default_model_name)
-    logger.info("Другие модели будут загружаться по требованию задачи.")
+    logger.info("Модели будут сохраняться в памяти между задачами.")
 
 
 @celery_app.task(name="transcribe.process")
@@ -262,7 +266,7 @@ def process_transcription(
             token=settings.HF_TOKEN,
             compute_type=compute_type,
             cpu_threads=settings.MODEL_CPU_THREADS,
-            num_workers=settings.MODEL_NUM_WORKERS,
+            num_workers=settings.MODEL_NUM_CPU_WORKERS,
         )
 
         def _transcription_progress(progress: float):
@@ -354,5 +358,17 @@ def process_transcription(
 
         return result
     finally:
+        if settings.RELEASE_MODELS_ON_IDLE:
+            try:
+                transcriber_service.release()
+            except Exception as exc:
+                logger.warning("Не удалось выгрузить модель transcriber: %s", exc)
+
+            try:
+                from app.service.speaker_diarization import diary_service
+                diary_service.release()
+            except Exception as exc:
+                logger.warning("Не удалось выгрузить модель diarization: %s", exc)
+
         if input_path and not save_source and input_path.exists():
             input_path.unlink(missing_ok=True)
