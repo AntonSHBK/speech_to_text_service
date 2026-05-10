@@ -87,5 +87,9 @@ sudo apt-get install -y \
     libnvidia-container-tools=${NVIDIA_CONTAINER_TOOLKIT_VERSION} \
     libnvidia-container1=${NVIDIA_CONTAINER_TOOLKIT_VERSION}
 
+<<<<<<< HEAD
+=======
+
+>>>>>>> fb94862df7cc93bee1bb596ddf6a73d9201139a8
 # Docker build clear
 docker builder prune -a
