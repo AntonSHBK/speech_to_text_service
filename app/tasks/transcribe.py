@@ -145,7 +145,7 @@ def process_transcription(
     audio_path: str | None = None,
     source_filename: str | None = None,
     source_url: str | None = None,
-    model: ModelTranscribeSize = "medium",
+    model: ModelTranscribeSize = "large",
     language: str | None = None,
     task: str = "transcribe",
     log_progress: bool = False,
@@ -248,13 +248,16 @@ def process_transcription(
 
         source_filename = source_filename or input_path.name
 
-        media_duration_sec = _probe_media_duration_seconds(input_path)
-        _emit_progress()
-        selected_model = _select_model_by_duration(
-            model=model,
-            audio_path=input_path,
-            duration=media_duration_sec,
-        )
+        # media_duration_sec = _probe_media_duration_seconds(input_path)
+        # _emit_progress()
+        
+        # selected_model = _select_model_by_duration(
+        #     model=model,
+        #     audio_path=input_path,
+        #     duration=media_duration_sec,
+        # )
+        
+        selected_model = model
         
         compute_type = settings.get_model_compute_type(selected_model)
         resolved_model_name = resolve_model_name(selected_model)

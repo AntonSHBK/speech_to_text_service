@@ -24,7 +24,7 @@ def _enqueue_transcription_task(
     audio_source: Path | None = None,
     source_filename: str | None = None,
     source_url: str | None = None,
-    model: ModelTranscribeSize = "medium",
+    model: ModelTranscribeSize = "large",
     language: Optional[str] = None,
     task: str = "transcribe",
     log_progress: bool = False,
@@ -133,7 +133,7 @@ def _enqueue_transcription_task(
 async def submit_transcription_file(
     file: UploadFile = File(...),
     model: ModelTranscribeSize = Query(
-        "medium",
+        "large",
         description="Размер модели Whisper: small, medium, large.",
     ),
     language: Optional[str] = Query(
@@ -390,7 +390,7 @@ async def submit_transcription_url(
         description="Публичный URL медиа (YouTube, Rutube и т.д.)."
     ),
     model: ModelTranscribeSize = Query(
-        "medium",
+        "large",
         description="Размер модели Whisper: small, medium, large.",
     ),
     language: Optional[str] = Query(
