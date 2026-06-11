@@ -1,3 +1,4 @@
+import re
 from typing import Any
 
 
@@ -29,6 +30,19 @@ def _resolve_diarization_segments(result: dict) -> list[dict[str, Any]]:
     return [s for s in segments if isinstance(s, dict)]
 
 
+def format_speaker_label(label: Any) -> str | None:
+    if label is None:
+        return None
+
+    value = str(label).strip()
+    match = re.fullmatch(r"speaker(?:[\s_-]*(.*))?", value, flags=re.IGNORECASE)
+    if not match:
+        return value
+
+    suffix = (match.group(1) or "").strip()
+    return f"Спикер {suffix}".rstrip()
+
+
 def _pick_speaker(
     segment: dict[str, Any],
     diarization_segments: list[dict[str, Any]],
@@ -46,7 +60,7 @@ def _pick_speaker(
         if overlap > best_overlap:
             best_overlap = overlap
             label = ds.get("speaker")
-            best_speaker = str(label) if label is not None else None
+            best_speaker = format_speaker_label(label)
 
     return best_speaker
 
