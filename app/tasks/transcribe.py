@@ -329,20 +329,30 @@ def process_transcription(
                 stage_progress["diarization"] = max(0.0, min(100.0, float(progress)))
                 _emit_progress()
 
-            with ProgressHook() as active_hook:
-                diarization_result = diary_service.diarize(
-                    audio_path=input_path,
-                    model=diarization_model,
-                    hook=active_hook,
-                    num_speakers=num_speakers,
-                    min_speakers=min_speakers,
-                    max_speakers=max_speakers,
-                    on_progress=_diarization_progress,
-                )
+            try:
+                with ProgressHook() as active_hook:
+                    diarization_result = diary_service.diarize(
+                        audio_path=input_path,
+                        model=diarization_model,
+                        hook=active_hook,
+                        num_speakers=num_speakers,
+                        min_speakers=min_speakers,
+                        max_speakers=max_speakers,
+                        on_progress=_diarization_progress,
+                    )
 
-            result["diarization"] = diarization_result
-            stage_progress["diarization"] = 100.0
-            _emit_progress()
+                result["diarization"] = diarization_result
+                result["diarization_error"] = None
+            except Exception as exc:
+                logger.exception(
+                    "Определение спикеров завершилось с ошибкой | файл=%s",
+                    input_path,
+                )
+                result["diarization"] = None
+                result["diarization_error"] = str(exc)
+            finally:
+                stage_progress["diarization"] = 100.0
+                _emit_progress()
 
         if save_result:
             result_file = transcriber_service.export_result(

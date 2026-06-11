@@ -54,7 +54,7 @@ class FastWhisperTranscriber(BaseModel):
     def transcribe(
         self,
         audio_path: Union[str, Path],
-        language: Optional[str] = "ru",
+        language: Optional[str] = None,
         task: str = "transcribe",
         beam_size: int = 3,
         chunk_length: Optional[int] = None,

@@ -1,10 +1,11 @@
 import time
 import tempfile
+import subprocess
 from pathlib import Path
 from typing import Any, Callable
 
+import soundfile as sf
 import torch
-import torchaudio
 from pyannote.audio import Pipeline
 
 from app.utils.logging import get_logger
@@ -70,57 +71,116 @@ class SpeakerDiarizationModel:
         self.logger.info("Пайплайн diarization загружен: %s", model_name)
         return pipeline
 
-    def _prepare_audio_for_diarization(self, source: Path) -> tuple[Path, bool]:
-        """
-        Преобразует медиа в стабильный WAV-формат (mono 16k PCM16) для pyannote.
-        Возвращает (путь, временный_ли_файл).
-        """
+    def _prepare_audio_for_diarization(
+        self,
+        source: Path,
+    ) -> tuple[dict[str, Any], Path]:
+        """Преобразует медиа в mono 16 kHz PCM и загружает без TorchCodec."""
+        with tempfile.NamedTemporaryFile(
+            delete=False,
+            suffix=".wav",
+            dir=source.parent,
+        ) as tmp:
+            prepared_path = Path(tmp.name)
+
         try:
-            waveform, sample_rate = torchaudio.load(str(source))
-            if waveform.ndim == 2 and waveform.shape[0] > 1:
-                waveform = waveform.mean(dim=0, keepdim=True)
-            elif waveform.ndim == 1:
-                waveform = waveform.unsqueeze(0)
-
-            target_sample_rate = 16000
-            if sample_rate != target_sample_rate:
-                waveform = torchaudio.functional.resample(
-                    waveform,
-                    orig_freq=sample_rate,
-                    new_freq=target_sample_rate,
-                )
-                sample_rate = target_sample_rate
-
-            with tempfile.NamedTemporaryFile(
-                delete=False,
-                suffix=".wav",
-                dir=source.parent,
-            ) as tmp:
-                prepared_path = Path(tmp.name)
-
-            torchaudio.save(
+            base_command = [
+                "ffmpeg",
+                "-y",
+                "-v",
+                "error",
+            ]
+            output_options = [
+                "-map",
+                "0:a:0",
+                "-vn",
+                "-sn",
+                "-dn",
+                "-ac",
+                "1",
+                "-ar",
+                "16000",
+                "-c:a",
+                "pcm_s16le",
                 str(prepared_path),
-                waveform,
-                sample_rate,
-                encoding="PCM_S",
-                bits_per_sample=16,
+            ]
+            attempts = (
+                ("строгий", []),
+                (
+                    "восстановление",
+                    [
+                        "-fflags",
+                        "+discardcorrupt",
+                        "-err_detect",
+                        "ignore_err",
+                    ],
+                ),
             )
+            errors: list[str] = []
+            audio = None
+            sample_rate = 0
 
+            for attempt_name, input_options in attempts:
+                prepared_path.unlink(missing_ok=True)
+                completed = subprocess.run(
+                    [
+                        *base_command,
+                        *input_options,
+                        "-i",
+                        str(source),
+                        *output_options,
+                    ],
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+
+                if completed.returncode != 0:
+                    error = (completed.stderr or "").strip()
+                    errors.append(
+                        f"{attempt_name}: ffmpeg code={completed.returncode}: {error}"
+                    )
+                    continue
+
+                try:
+                    audio, sample_rate = sf.read(
+                        prepared_path,
+                        dtype="float32",
+                        always_2d=True,
+                    )
+                except Exception as exc:
+                    errors.append(f"{attempt_name}: WAV не читается: {exc}")
+                    continue
+
+                if audio.size == 0 or audio.shape[0] == 0:
+                    errors.append(f"{attempt_name}: ffmpeg создал пустой аудиофайл")
+                    audio = None
+                    continue
+
+                break
+
+            if audio is None:
+                raise RuntimeError("; ".join(errors))
+
+            waveform = torch.from_numpy(audio.T.copy())
             self.logger.info(
-                "Аудио нормализовано для diarization | исходник=%s | подготовленный=%s | sample_rate=%s | channels=%s",
+                "Аудио подготовлено для diarization | исходник=%s | "
+                "подготовленный=%s | sample_rate=%s | channels=%s",
                 source,
                 prepared_path,
                 sample_rate,
-                waveform.shape[0] if waveform.ndim > 1 else 1,
+                waveform.shape[0],
             )
-            return prepared_path, True
+
+            return {
+                "waveform": waveform,
+                "sample_rate": int(sample_rate),
+            }, prepared_path
         except Exception as exc:
-            self.logger.warning(
-                "Нормализация аудио не удалась, используем исходный файл | файл=%s | ошибка=%s",
-                source,
-                exc,
-            )
-            return source, False
+            prepared_path.unlink(missing_ok=True)
+            raise RuntimeError(
+                f"Не удалось подготовить аудио для diarization: {source}"
+            ) from exc
 
     def diarize(
         self,
@@ -158,13 +218,12 @@ class SpeakerDiarizationModel:
             kwargs["hook"] = effective_hook
 
         started_at = time.perf_counter()
-        prepared_source, is_temp_prepared = self._prepare_audio_for_diarization(source)
+        prepared_audio, prepared_path = self._prepare_audio_for_diarization(source)
 
         try:
-            output = self.pipeline(str(prepared_source), **kwargs)
+            output = self.pipeline(prepared_audio, **kwargs)
         finally:
-            if is_temp_prepared and prepared_source.exists():
-                prepared_source.unlink(missing_ok=True)
+            prepared_path.unlink(missing_ok=True)
 
         segments: list[dict[str, Any]] = []
         speakers: set[str] = set()

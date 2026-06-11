@@ -20,6 +20,16 @@ DEFAULT_TEMPERATURE = [0.0, 0.2, 0.4, 0.6, 0.8, 1.0]
 DEFAULT_SUPPRESS_TOKENS = [-1]
 
 
+def _normalize_optional_language(language: str | None) -> str | None:
+    if language is None:
+        return None
+
+    normalized = language.strip().lower()
+    if normalized in {"", "null", "none"}:
+        return None
+    return normalized
+
+
 def _enqueue_transcription_task(
     audio_source: Path | None = None,
     source_filename: str | None = None,
@@ -70,6 +80,7 @@ def _enqueue_transcription_task(
     save_result: bool = True,
 ) -> dict:
     audio_path = str(audio_source) if audio_source else None
+    language = _normalize_optional_language(language)
     queued_task = process_transcription.delay(
         audio_path=audio_path,
         source_filename=source_filename,
