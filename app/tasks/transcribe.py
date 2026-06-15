@@ -159,7 +159,7 @@ def process_transcription(
     compression_ratio_threshold: float | None = 2.4,
     log_prob_threshold: float | None = -1.0,
     no_speech_threshold: float | None = 0.6,
-    condition_on_previous_text: bool = True,
+    condition_on_previous_text: bool = False,
     prompt_reset_on_temperature: float = 0.5,
     initial_prompt: str | None = None,
     prefix: str | None = None,
@@ -171,8 +171,10 @@ def process_transcription(
     prepend_punctuations: str = "\"'“¿([{-",
     append_punctuations: str = "\"'.。,，!！?？:：”)]}、",
     multilingual: bool = False,
-    vad_filter: bool = False,
-    vad_parameters: str | None = None,
+    vad_filter: bool = True,
+    vad_parameters: str | None = (
+        '{"min_silence_duration_ms":500,"speech_pad_ms":200}'
+    ),
     max_new_tokens: int | None = None,
     chunk_length: int | None = None,
     clip_timestamps: str = "0",

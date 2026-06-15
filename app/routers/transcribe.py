@@ -18,6 +18,9 @@ router = APIRouter(tags=["Транскрибация"])
 
 DEFAULT_TEMPERATURE = [0.0, 0.2, 0.4, 0.6, 0.8, 1.0]
 DEFAULT_SUPPRESS_TOKENS = [-1]
+DEFAULT_VAD_PARAMETERS = (
+    '{"min_silence_duration_ms":500,"speech_pad_ms":200}'
+)
 
 
 def _normalize_optional_language(language: str | None) -> str | None:
@@ -48,7 +51,7 @@ def _enqueue_transcription_task(
     compression_ratio_threshold: float | None = 2.4,
     log_prob_threshold: float | None = -1.0,
     no_speech_threshold: float | None = 0.6,
-    condition_on_previous_text: bool = True,
+    condition_on_previous_text: bool = False,
     prompt_reset_on_temperature: float = 0.5,
     initial_prompt: str | None = None,
     prefix: str | None = None,
@@ -60,8 +63,8 @@ def _enqueue_transcription_task(
     prepend_punctuations: str = "\"'“¿([{-",
     append_punctuations: str = "\"'.。,，!！?？:：”)]}、",
     multilingual: bool = False,
-    vad_filter: bool = False,
-    vad_parameters: str | None = None,
+    vad_filter: bool = True,
+    vad_parameters: str | None = DEFAULT_VAD_PARAMETERS,
     max_new_tokens: int | None = None,
     chunk_length: int | None = None,
     clip_timestamps: str = "0",
@@ -148,7 +151,7 @@ async def submit_transcription_file(
         description="Размер модели Whisper: small, medium, large.",
     ),
     language: Optional[str] = Query(
-        'ru',
+        None,
         description="Код языка речи (например: ru, en). Если не задан, язык определяется автоматически.",
     ),
     task: str = Query(
@@ -208,7 +211,7 @@ async def submit_transcription_file(
         description="Порог вероятности отсутствия речи.",
     ),
     condition_on_previous_text: bool = Query(
-        True,
+        False,
         description="Использовать предыдущий текст как prompt для следующего окна.",
     ),
     prompt_reset_on_temperature: float = Query(
@@ -217,7 +220,10 @@ async def submit_transcription_file(
     ),
     initial_prompt: str | None = Query(
         None,
-        description="Начальный prompt для первого окна.",
+        description=(
+            "Начальный prompt для первого окна. Если не задан, модель работает "
+            "без дополнительной инструкции. Пример: Ставь точки, запятые, вопросительные знаки и дели текст на предложения."
+        )
     ),
     prefix: str | None = Query(
         None,
@@ -257,12 +263,15 @@ async def submit_transcription_file(
         description="Определять язык для каждого сегмента.",
     ),
     vad_filter: bool = Query(
-        False,
+        True,
         description="Включить VAD (Silero) для удаления участков без речи.",
     ),
     vad_parameters: str | None = Query(
-        None,
-        description="Параметры VAD в JSON-строке (например: {\"min_silence_duration_ms\":500}).",
+        DEFAULT_VAD_PARAMETERS,
+        description=(
+            "Параметры VAD в JSON-строке. По умолчанию: "
+            '{"min_silence_duration_ms":500,"speech_pad_ms":200}.'
+        ),
     ),
     max_new_tokens: int | None = Query(
         None,
@@ -405,7 +414,7 @@ async def submit_transcription_url(
         description="Размер модели Whisper: small, medium, large.",
     ),
     language: Optional[str] = Query(
-        'ru',
+        None,
         description="Код языка речи (например: ru, en). Если не задан, язык определяется автоматически.",
     ),
     task: str = Query(
@@ -465,7 +474,7 @@ async def submit_transcription_url(
         description="Порог вероятности отсутствия речи.",
     ),
     condition_on_previous_text: bool = Query(
-        True,
+        False,
         description="Использовать предыдущий текст как prompt для следующего окна.",
     ),
     prompt_reset_on_temperature: float = Query(
@@ -474,7 +483,10 @@ async def submit_transcription_url(
     ),
     initial_prompt: str | None = Query(
         None,
-        description="Начальный prompt для первого окна.",
+        description=(
+            "Начальный prompt для первого окна. Если не задан, модель работает "
+            "без дополнительной инструкции. Пример: Ставь точки, запятые, вопросительные знаки и дели текст на предложения."
+        )
     ),
     prefix: str | None = Query(
         None,
@@ -514,12 +526,15 @@ async def submit_transcription_url(
         description="Определять язык для каждого сегмента.",
     ),
     vad_filter: bool = Query(
-        False,
+        True,
         description="Включить VAD (Silero) для удаления участков без речи.",
     ),
     vad_parameters: str | None = Query(
-        None,
-        description="Параметры VAD в JSON-строке (например: {\"min_silence_duration_ms\":500}).",
+        DEFAULT_VAD_PARAMETERS,
+        description=(
+            "Параметры VAD в JSON-строке. По умолчанию: "
+            '{"min_silence_duration_ms":500,"speech_pad_ms":200}.'
+        ),
     ),
     max_new_tokens: int | None = Query(
         None,
