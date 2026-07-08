@@ -7,7 +7,7 @@ from logging.handlers import RotatingFileHandler
 def _create_logger(name: str, log_dir: Path, log_file: str, log_level: str, max_bytes: int, backup_count: int):
     """Вспомогательная функция для создания именованных логгеров."""
     formatter = logging.Formatter(
-        "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        "%(asctime)s - %(name)s - %(levelname)s - %(processName)s[%(process)d] - %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S"
     )
 
@@ -15,6 +15,14 @@ def _create_logger(name: str, log_dir: Path, log_file: str, log_level: str, max_
     logger.setLevel(log_level)
 
     target_path = (log_dir / log_file).resolve()
+    if target_path.is_dir():
+        try:
+            target_path.rmdir()
+        except OSError as exc:
+            raise RuntimeError(
+                f"Путь лога должен быть файлом, но является директорией: {target_path}"
+            ) from exc
+
     has_same_file_handler = False
     for handler in logger.handlers:
         if isinstance(handler, RotatingFileHandler):
@@ -42,9 +50,11 @@ def _resolve_log_file_by_name(name: str) -> str:
     """Возвращает имя файла лога для логгера."""
     if name.startswith("api"):
         return "api.log"
-    if name.startswith("model.") or name.startswith("diarization.") or name == "worker.models":
-        return "model.log"
-    if name.startswith("worker."):
+    if (
+        name.startswith("worker.")
+        or name.startswith("model.")
+        or name.startswith("diarization.")
+    ):
         return "worker.log"
 
     safe_name = "".join(ch if ch.isalnum() or ch in "._-" else "_" for ch in name)
@@ -58,7 +68,7 @@ def setup_logging(log_dir: Path = Path("logs"), log_level: str = "INFO"):
 
     # Общий форматтер
     formatter = logging.Formatter(
-        "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        "%(asctime)s - %(name)s - %(levelname)s - %(processName)s[%(process)d] - %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S"
     )
 
@@ -70,16 +80,6 @@ def setup_logging(log_dir: Path = Path("logs"), log_level: str = "INFO"):
         console_handler = logging.StreamHandler(sys.stdout)
         console_handler.setFormatter(formatter)
         root_logger.addHandler(console_handler)
-
-        # Общий файл
-        file_handler = RotatingFileHandler(
-            log_dir / "app.log",
-            maxBytes=10 * 1024 * 1024,
-            backupCount=5,
-            encoding="utf-8"
-        )
-        file_handler.setFormatter(formatter)
-        root_logger.addHandler(file_handler)
 
 
 def get_logger(name: str, log_dir: Path = Path("logs"), log_file: str | None = None, log_level: str = "INFO"):
