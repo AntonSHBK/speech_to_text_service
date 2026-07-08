@@ -33,6 +33,9 @@ class Settings(BaseSettings):
     DATA_DIR: Path = BASE_DIR / "data"
     AUDIO_DIR: Path = BASE_DIR / "data" / "audio"
     TRANSCRIBE_RESULTS_DIR: Path = BASE_DIR / "data" / "transcriptions"
+    AUTO_CLEANUP_ENABLED: bool = True
+    CLEANUP_FILE_TTL_HOURS: int = 24
+    CLEANUP_INTERVAL_MINUTES: int = 60
     CACHE_DIR: Path = BASE_DIR / "data" / "cache_dir"
     LOG_DIR: Path = BASE_DIR / "logs"
 
@@ -57,7 +60,8 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=BASE_DIR / ".env",
         env_file_encoding="utf-8",
-        case_sensitive=True
+        case_sensitive=True,
+        extra="ignore"
     )
 
 
@@ -85,3 +89,5 @@ class Settings(BaseSettings):
 settings = Settings()
 
 setup_logging(log_dir=settings.LOG_DIR, log_level=settings.LOG_LEVEL)
+
+

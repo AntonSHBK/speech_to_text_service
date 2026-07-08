@@ -1,4 +1,4 @@
-from celery import Celery
+﻿from celery import Celery
 
 from app.settings import settings
 
@@ -31,3 +31,9 @@ celery_app.conf.update(
     # Time (seconds) before an unacked task is considered visible again in broker.
     broker_transport_options={"visibility_timeout": 3600},
 )
+celery_app.conf.beat_schedule = {
+    "cleanup-old-files": {
+        "task": "cleanup.old_files",
+        "schedule": max(settings.CLEANUP_INTERVAL_MINUTES, 1) * 60,
+    },
+}

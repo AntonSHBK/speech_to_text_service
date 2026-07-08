@@ -1,4 +1,4 @@
-name: speech_to_text_service
+﻿name: speech_to_text_service
 
 services:
   speech-to-text-service:
@@ -39,6 +39,23 @@ services:
       - shared_net
     restart: unless-stopped
 
+  beat:
+    build:
+      context: ../
+      dockerfile: ./docker/Dockerfile.gpu
+    volumes:
+      - ../:/app/
+      - ../logs:/app/logs
+      - beat_data:/data
+    command: celery -A app.celery_worker.celery_app beat --loglevel=info --schedule=/data/celerybeat-schedule
+    env_file:
+      - ./.env
+    depends_on:
+      - redis
+    networks:
+      - shared_net
+    restart: unless-stopped
+
   flower:
     build:
       context: ../
@@ -73,4 +90,5 @@ networks:
 
 volumes:
   redis_data:
+  beat_data:
   flower_data:
