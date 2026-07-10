@@ -1,4 +1,4 @@
-﻿name: speech_to_text_service
+name: speech_to_text_service
 
 services:
   speech-to-text-service:
@@ -19,17 +19,39 @@ services:
       - shared_net
     restart: unless-stopped
 
-  worker:
+  worker-1:
     build:
       context: ../
       dockerfile: ./docker/Dockerfile.gpu
     volumes:
       - ../:/app/
       - ../logs:/app/logs
-    command: celery -A app.celery_worker.celery_app worker --loglevel=info --pool=solo --concurrency=1
+    command: celery -A app.celery_worker.celery_app worker --loglevel=info --pool=solo --concurrency=1 --hostname=worker-1@%h
     env_file:
       - ./.env
     environment:
+      - WORKER_NAME=worker-1
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+    gpus: all
+    depends_on:
+      - redis
+    networks:
+      - shared_net
+    restart: unless-stopped
+
+  worker-2:
+    build:
+      context: ../
+      dockerfile: ./docker/Dockerfile.gpu
+    volumes:
+      - ../:/app/
+      - ../logs:/app/logs
+    command: celery -A app.celery_worker.celery_app worker --loglevel=info --pool=solo --concurrency=1 --hostname=worker-2@%h
+    env_file:
+      - ./.env
+    environment:
+      - WORKER_NAME=worker-2
       - NVIDIA_VISIBLE_DEVICES=all
       - NVIDIA_DRIVER_CAPABILITIES=compute,utility
     gpus: all
@@ -67,7 +89,8 @@ services:
       - flower_data:/data
     depends_on:
       - redis
-      - worker
+      - worker-1
+      - worker-2
     ports:
       - "5555:5555"
     networks:
