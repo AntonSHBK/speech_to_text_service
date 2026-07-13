@@ -9,7 +9,6 @@ LOG_BACKUP_COUNT = 3
 LOG_FORMAT = "%(asctime)s - %(name)s - %(levelname)s - %(processName)s[%(process)d] - %(message)s"
 LOG_DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
 
-
 WORKER_LOG_PREFIXES = (
     "worker.",
     "model.",
@@ -29,7 +28,7 @@ def _ensure_log_path(target_path: Path) -> None:
         target_path.rmdir()
     except OSError as exc:
         raise RuntimeError(
-            f"Путь лога должен быть файлом, но является директорией: {target_path}"
+            f"Log path must be a file, but it is a directory: {target_path}"
         ) from exc
 
 
@@ -78,7 +77,7 @@ def _worker_log_stem() -> str:
 
 
 def _resolve_log_file_by_name(name: str) -> str:
-    """Возвращает имя основного файла лога для логгера."""
+    """Return the main log file name for a logger."""
     if name.startswith("api"):
         return "api.log"
     if _is_worker_logger(name):
@@ -88,7 +87,7 @@ def _resolve_log_file_by_name(name: str) -> str:
 
 
 def setup_logging(log_dir: Path = Path("logs"), log_level: str = "INFO"):
-    """Настраивает базовое логирование в stdout."""
+    """Configure base stdout logging and process log files."""
     log_dir.mkdir(parents=True, exist_ok=True)
     log_level = log_level.upper()
 
@@ -100,6 +99,20 @@ def setup_logging(log_dir: Path = Path("logs"), log_level: str = "INFO"):
         console_handler.setFormatter(_formatter())
         root_logger.addHandler(console_handler)
 
+    worker_name = os.getenv("WORKER_NAME", "").strip()
+    if worker_name:
+        process_log_stem = _safe_log_name(worker_name)
+        _add_file_handler(
+            logger=root_logger,
+            target_path=(log_dir / f"{process_log_stem}.log").resolve(),
+            level=log_level,
+        )
+        _add_file_handler(
+            logger=root_logger,
+            target_path=(log_dir / f"{process_log_stem}.warning.log").resolve(),
+            level=logging.WARNING,
+        )
+
 
 def get_logger(
     name: str,
@@ -107,7 +120,7 @@ def get_logger(
     log_file: str | None = None,
     log_level: str = "INFO",
 ):
-    """Создаёт или возвращает именованный логгер."""
+    """Create or return a named logger."""
     logger = logging.getLogger(name)
     logger.setLevel(log_level.upper())
 

@@ -1,4 +1,4 @@
-﻿from pathlib import Path
+from pathlib import Path
 import json
 import torchaudio
 import subprocess
@@ -18,6 +18,33 @@ logger = get_logger("worker.init")
 
 TRANSCRIPTION_WEIGHT = 0.50
 DIARIZATION_WEIGHT = 0.50
+GPU_RETRY_COUNTDOWN_SEC = 60
+GPU_MAX_RETRIES = 3
+
+
+def _is_retryable_gpu_error(exc: Exception) -> bool:
+    message = str(exc).lower()
+    retryable_markers = (
+        "cuda",
+        "cublas",
+        "cudnn",
+        "out of memory",
+        "invalid device ordinal",
+    )
+    return any(marker in message for marker in retryable_markers)
+
+
+def _release_models_after_failure() -> None:
+    try:
+        transcriber_service.release()
+    except Exception as release_exc:
+        logger.warning("Не удалось выгрузить модель transcriber после ошибки: %s", release_exc)
+
+    try:
+        from app.service.speaker_diarization import diary_service
+        diary_service.release()
+    except Exception as release_exc:
+        logger.warning("Не удалось выгрузить модель diarization после ошибки: %s", release_exc)
 
 
 def _probe_media_duration_seconds(audio_path: Path) -> float | None:
@@ -140,8 +167,9 @@ def init_transcriber_worker(**kwargs):
     logger.info("Модели будут сохраняться в памяти между задачами.")
 
 
-@celery_app.task(name="transcribe.process")
+@celery_app.task(bind=True, name="transcribe.process")
 def process_transcription(
+    self,
     audio_path: str | None = None,
     source_filename: str | None = None,
     source_url: str | None = None,
@@ -196,7 +224,7 @@ def process_transcription(
     result_file = None
     media_duration_sec: float | None = None
     selected_model: ModelTranscribeSize = model
-    mark_task_started(process_transcription.request.id)
+    mark_task_started(self.request.id)
     stage_progress: dict[str, float | None] = {
         "transcription": 0.0,
         "diarization": 0.0 if diarization else None,
@@ -215,7 +243,7 @@ def process_transcription(
         else:
             overall = transcription_progress
 
-        process_transcription.update_state(
+        self.update_state(
             state="PROGRESS",
             meta={
                 "progress": round(overall, 1),
@@ -238,6 +266,8 @@ def process_transcription(
             parsed_vad_parameters = json.loads(vad_parameters)
         except json.JSONDecodeError as exc:
             raise ValueError("Некорректный JSON в vad_parameters") from exc
+
+    retry_scheduled = False
 
     try:
         if source_url:
@@ -372,6 +402,32 @@ def process_transcription(
             result["download_url"] = None
 
         return result
+    except Exception as exc:
+        if _is_retryable_gpu_error(exc):
+            _release_models_after_failure()
+
+            if self.request.retries < GPU_MAX_RETRIES:
+                retry_scheduled = True
+                logger.exception(
+                    "GPU/CUDA ошибка при транскрибации, задача будет возвращена в очередь | task_id=%s | retry=%s/%s | countdown=%ss",
+                    self.request.id,
+                    self.request.retries + 1,
+                    GPU_MAX_RETRIES,
+                    GPU_RETRY_COUNTDOWN_SEC,
+                )
+                raise self.retry(
+                    exc=exc,
+                    countdown=GPU_RETRY_COUNTDOWN_SEC,
+                    max_retries=GPU_MAX_RETRIES,
+                ) from exc
+
+            logger.exception(
+                "GPU/CUDA ошибка при транскрибации, лимит повторов исчерпан | task_id=%s | retries=%s/%s",
+                self.request.id,
+                self.request.retries,
+                GPU_MAX_RETRIES,
+            )
+        raise
     finally:
         if settings.RELEASE_MODELS_ON_IDLE:
             try:
@@ -385,5 +441,5 @@ def process_transcription(
             except Exception as exc:
                 logger.warning("Не удалось выгрузить модель diarization: %s", exc)
 
-        if input_path and not save_source and input_path.exists():
+        if input_path and not retry_scheduled and not save_source and input_path.exists():
             input_path.unlink(missing_ok=True)

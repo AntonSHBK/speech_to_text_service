@@ -1,4 +1,4 @@
-﻿from celery import Celery
+from celery import Celery
 
 from app.settings import settings
 
@@ -26,6 +26,8 @@ celery_app.conf.update(
     task_acks_on_failure_or_timeout=True,
     # Reserve one task per worker process to avoid long task starvation.
     worker_prefetch_multiplier=1,
+    # Keep root handlers configured by app.utils.logging so Celery tracebacks go to worker files.
+    worker_hijack_root_logger=False,
     # Keep task results in backend for 24 hours.
     result_expires=86400,
     # Time (seconds) before an unacked task is considered visible again in broker.
