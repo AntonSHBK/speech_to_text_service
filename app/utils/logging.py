@@ -123,27 +123,32 @@ def get_logger(
     """Create or return a named logger."""
     logger = logging.getLogger(name)
     logger.setLevel(log_level.upper())
+    logger.propagate = True
 
-    resolved_log_file = log_file or _resolve_log_file_by_name(name)
     log_dir.mkdir(parents=True, exist_ok=True)
+    worker_name = os.getenv("WORKER_NAME", "").strip()
+    is_worker_logger = _is_worker_logger(name)
 
-    _add_file_handler(
-        logger=logger,
-        target_path=(log_dir / resolved_log_file).resolve(),
-        level=log_level.upper(),
-    )
+    # Worker root logger owns worker-N.log and worker-N.warning.log.
+    # Named worker/model/diarization loggers propagate to root to avoid duplicate lines.
+    should_add_named_file = not is_worker_logger or not worker_name or log_file is not None
+
+    # Do not create fallback worker.log when API imports task modules outside a worker process.
+    if is_worker_logger and not worker_name and log_file is None:
+        should_add_named_file = False
+
+    if should_add_named_file:
+        resolved_log_file = log_file or _resolve_log_file_by_name(name)
+        _add_file_handler(
+            logger=logger,
+            target_path=(log_dir / resolved_log_file).resolve(),
+            level=log_level.upper(),
+        )
 
     if name.startswith("api"):
         _add_file_handler(
             logger=logger,
             target_path=(log_dir / "api.warning.log").resolve(),
-            level=logging.WARNING,
-        )
-
-    if _is_worker_logger(name):
-        _add_file_handler(
-            logger=logger,
-            target_path=(log_dir / f"{_worker_log_stem()}.warning.log").resolve(),
             level=logging.WARNING,
         )
 
