@@ -10,29 +10,43 @@ celery_app = Celery(
 )
 
 celery_app.conf.update(
-    # Marks task as STARTED in backend before execution.
+    # Помечает задачу как STARTED в хранилище результатов перед началом выполнения.
     task_track_started=True,
-    # Use JSON for task payload serialization.
+    # Публикует события жизненного цикла задач, чтобы Flower отображал активные,
+    # зарезервированные и запланированные задачи.
+    worker_send_task_events=True,
+    task_send_sent_event=True,
+    # Явно включает повторные попытки подключения к брокеру при запуске
+    # для совместимости с Celery 6.
+    broker_connection_retry_on_startup=True,
+    # Использует JSON для сериализации данных задач.
     task_serializer="json",
-    # Use JSON for result serialization in backend.
+    # Использует JSON для сериализации результатов в хранилище.
     result_serializer="json",
-    # Only accept JSON messages from broker.
+    # Принимает от брокера только сообщения в формате JSON.
     accept_content=["json"],
-    # Acknowledge task only after execution to reduce task loss on worker crash.
+    # Подтверждает выполнение задачи только после её завершения,
+    # чтобы снизить вероятность потери задачи при сбое воркера.
     task_acks_late=True,
-    # Re-queue task if worker process is lost while processing it.
+    # Возвращает задачу в очередь, если процесс воркера завершился
+    # во время её обработки.
     task_reject_on_worker_lost=True,
-    # Ack failed/timeout tasks explicitly to keep broker state consistent.
+    # Явно подтверждает завершившиеся с ошибкой или по таймауту задачи,
+    # чтобы состояние брокера оставалось согласованным.
     task_acks_on_failure_or_timeout=True,
-    # Reserve one task per worker process to avoid long task starvation.
+    # Резервирует по одной задаче на процесс воркера,
+    # чтобы избежать голодания длительных задач.
     worker_prefetch_multiplier=1,
-    # Keep root handlers configured by app.utils.logging so Celery tracebacks go to worker files.
+    # Сохраняет корневые обработчики логирования, настроенные в app.utils.logging,
+    # чтобы трассировки Celery записывались в логи воркера.
     worker_hijack_root_logger=False,
-    # Keep task results in backend for 24 hours.
+    # Хранит результаты задач в хранилище в течение 24 часов.
     result_expires=86400,
-    # Time (seconds) before an unacked task is considered visible again in broker.
+    # Время (в секундах), после которого неподтверждённая задача
+    # снова становится доступной в брокере.
     broker_transport_options={"visibility_timeout": 3600},
 )
+
 celery_app.conf.beat_schedule = {
     "cleanup-old-files": {
         "task": "cleanup.old_files",

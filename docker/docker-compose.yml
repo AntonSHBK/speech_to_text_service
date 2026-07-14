@@ -28,7 +28,7 @@ services:
     volumes:
       - ../:/app/
       - ../logs:/app/logs
-    command: celery -A app.celery_worker.celery_app worker --loglevel=info --concurrency=1 --hostname=worker-1@%h
+    command: celery -A app.celery_worker.celery_app worker --loglevel=info --events --concurrency=1 --hostname=worker-1@%h
     env_file:
       - ./.env
     depends_on:
@@ -46,7 +46,7 @@ services:
     volumes:
       - ../:/app/
       - ../logs:/app/logs
-    command: celery -A app.celery_worker.celery_app worker --loglevel=info --concurrency=1 --hostname=worker-2@%h
+    command: celery -A app.celery_worker.celery_app worker --loglevel=info --events --concurrency=1 --hostname=worker-2@%h
     env_file:
       - ./.env
     depends_on:

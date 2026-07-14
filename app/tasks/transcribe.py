@@ -355,7 +355,6 @@ def process_transcription(
 
         if diarization:
             transcriber_service.release()
-            logger.info("Модель транскрибации выгружена перед определением спикеров")
 
             from app.service.speaker_diarization import diary_service
             from pyannote.audio.pipelines.utils.hook import ProgressHook
