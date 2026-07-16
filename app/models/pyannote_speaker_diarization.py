@@ -11,7 +11,7 @@ from pyannote.audio import Pipeline
 from app.utils.logging import get_logger
 
 
-class _ProgressBridgeHook:
+class _PyannoteProgressBridgeHook:
     """Передаёт прогресс pyannote hook в числовой callback [0..100]."""
 
     def __init__(self, on_progress: Callable[[float], None] | None = None):
@@ -38,7 +38,7 @@ class _ProgressBridgeHook:
         self.on_progress(progress)
 
 
-class _CompositeHook:
+class _PyannoteCompositeHook:
     """Вызывает несколько hook с одинаковыми данными прогресса pyannote."""
 
     def __init__(self, hooks: list[Any]):
@@ -49,7 +49,7 @@ class _CompositeHook:
             hook(*args, **kwargs)
 
 
-class SpeakerDiarizationModel:
+class PyannoteSpeakerDiarizationModel:
     """Обёртка над pyannote для определения спикеров."""
 
     def __init__(
@@ -182,6 +182,24 @@ class SpeakerDiarizationModel:
                 f"Не удалось подготовить аудио для diarization: {source}"
             ) from exc
 
+    def _apply_test_pipeline_parameters(self) -> None:
+        self.pipeline.instantiate( 
+            {
+                "segmentation": {
+                    # Минимальная длительность паузы между речевыми сегментами
+                    "min_duration_off": 0.0,
+                },
+                "clustering": {
+                    # Порог кластеризации
+                    "threshold": 0.70,
+
+                    # Параметры алгоритма VBx
+                    # "Fa": 0.07,
+                    # "Fb": 0.80,
+                },
+            }
+        )
+
     def diarize(
         self,
         audio_path: str | Path,
@@ -212,12 +230,13 @@ class SpeakerDiarizationModel:
         if max_speakers is not None:
             kwargs["max_speakers"] = max_speakers
 
-        bridge_hook = _ProgressBridgeHook(on_progress=on_progress) if on_progress else None
-        effective_hook = _CompositeHook([hook, bridge_hook]) if (hook or bridge_hook) else None
+        bridge_hook = _PyannoteProgressBridgeHook(on_progress=on_progress) if on_progress else None
+        effective_hook = _PyannoteCompositeHook([hook, bridge_hook]) if (hook or bridge_hook) else None
         if effective_hook is not None:
             kwargs["hook"] = effective_hook
 
         started_at = time.perf_counter()
+        self._apply_test_pipeline_parameters()
         prepared_audio, prepared_path = self._prepare_audio_for_diarization(source)
 
         try:

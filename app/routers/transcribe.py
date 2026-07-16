@@ -1,4 +1,4 @@
-﻿from pathlib import Path
+from pathlib import Path
 from typing import Optional
 import mimetypes
 
@@ -6,7 +6,7 @@ from fastapi import APIRouter, File, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse
 
 from app.celery_app import celery_app
-from app.models.catalog import ModelDiarizationType, ModelTranscribeSize
+from app.models.catalog import ModelTranscribeSize
 from app.service.queue_tracker import enqueue_task, get_queue_position
 from app.service.transcriber import transcriber_service
 from app.settings import settings
@@ -73,10 +73,13 @@ def _enqueue_transcription_task(
     language_detection_threshold: float | None = 0.5,
     language_detection_segments: int = 1,
     diarization: bool = False,
-    diarization_model: ModelDiarizationType = "pyannote_1",
     num_speakers: int | None = None,
-    min_speakers: int | None = None,
-    max_speakers: int | None = None,
+    diarization_num_threads: int = 2,
+    diarization_cluster_threshold: float = 1.0,
+    diarization_min_duration_on: float = 0.4,
+    diarization_min_duration_off: float = 0.4,
+    diarization_merge_gap: float = 0.2,
+    diarization_min_segment_duration: float = 0.3,
     result_format: ExportFormat = "docx",
     export_timestamps: bool = False,
     save_source: bool = False,
@@ -124,10 +127,13 @@ def _enqueue_transcription_task(
         language_detection_threshold=language_detection_threshold,
         language_detection_segments=language_detection_segments,
         diarization=diarization,
-        diarization_model=diarization_model,
         num_speakers=num_speakers,
-        min_speakers=min_speakers,
-        max_speakers=max_speakers,
+        diarization_num_threads=diarization_num_threads,
+        diarization_cluster_threshold=diarization_cluster_threshold,
+        diarization_min_duration_on=diarization_min_duration_on,
+        diarization_min_duration_off=diarization_min_duration_off,
+        diarization_merge_gap=diarization_merge_gap,
+        diarization_min_segment_duration=diarization_min_segment_duration,
         result_format=result_format,
         export_timestamps=export_timestamps,
         save_source=save_source,
@@ -311,24 +317,41 @@ async def submit_transcription_file(
         False,
         description="Включить diarization (разметку спикеров).",
     ),
-    diarization_model: ModelDiarizationType = Query(
-        "pyannote_1",
-        description="Модель diarization: pyannote_1 или pyannote_3_1.",
-    ),
     num_speakers: int | None = Query(
         None,
         ge=1,
-        description="Точное число спикеров (если известно заранее).",
+        description="Exact number of speakers for Sherpa-ONNX, if known.",
     ),
-    min_speakers: int | None = Query(
-        None,
+    diarization_num_threads: int = Query(
+        2,
         ge=1,
-        description="Минимальное число спикеров.",
+        description="Sherpa-ONNX CPU thread count for diarization.",
     ),
-    max_speakers: int | None = Query(
-        None,
-        ge=1,
-        description="Максимальное число спикеров.",
+    diarization_cluster_threshold: float = Query(
+        1.0,
+        gt=0.0,
+        le=1.0,
+        description="Sherpa-ONNX clustering threshold. Higher values merge similar voices more aggressively.",
+    ),
+    diarization_min_duration_on: float = Query(
+        0.2,
+        ge=0.0,
+        description="Sherpa-ONNX minimum speech segment duration in seconds.",
+    ),
+    diarization_min_duration_off: float = Query(
+        0.2,
+        ge=0.0,
+        description="Sherpa-ONNX minimum silence/gap duration between speech regions in seconds.",
+    ),
+    diarization_merge_gap: float = Query(
+        0.2,
+        ge=0.0,
+        description="Maximum gap in seconds for merging adjacent segments of the same speaker.",
+    ),
+    diarization_min_segment_duration: float = Query(
+        0.3,
+        ge=0.0,
+        description="Minimum final speaker segment duration in seconds.",
     ),
     result_format: ExportFormat = Query(
         "docx",
@@ -392,10 +415,13 @@ async def submit_transcription_file(
         language_detection_threshold=language_detection_threshold,
         language_detection_segments=language_detection_segments,
         diarization=diarization,
-        diarization_model=diarization_model,
         num_speakers=num_speakers,
-        min_speakers=min_speakers,
-        max_speakers=max_speakers,
+        diarization_num_threads=diarization_num_threads,
+        diarization_cluster_threshold=diarization_cluster_threshold,
+        diarization_min_duration_on=diarization_min_duration_on,
+        diarization_min_duration_off=diarization_min_duration_off,
+        diarization_merge_gap=diarization_merge_gap,
+        diarization_min_segment_duration=diarization_min_segment_duration,
         result_format=result_format,
         export_timestamps=export_timestamps,
         save_source=save_source,
@@ -574,24 +600,41 @@ async def submit_transcription_url(
         False,
         description="Включить diarization (разметку спикеров).",
     ),
-    diarization_model: ModelDiarizationType = Query(
-        "pyannote_1",
-        description="Модель diarization: pyannote_1 или pyannote_3_1.",
-    ),
     num_speakers: int | None = Query(
         None,
         ge=1,
-        description="Точное число спикеров (если известно заранее).",
+        description="Exact number of speakers for Sherpa-ONNX, if known.",
     ),
-    min_speakers: int | None = Query(
-        None,
+    diarization_num_threads: int = Query(
+        2,
         ge=1,
-        description="Минимальное число спикеров.",
+        description="Sherpa-ONNX CPU thread count for diarization.",
     ),
-    max_speakers: int | None = Query(
-        None,
-        ge=1,
-        description="Максимальное число спикеров.",
+    diarization_cluster_threshold: float = Query(
+        1.0,
+        gt=0.0,
+        le=1.0,
+        description="Sherpa-ONNX clustering threshold. Higher values merge similar voices more aggressively.",
+    ),
+    diarization_min_duration_on: float = Query(
+        0.2,
+        ge=0.0,
+        description="Sherpa-ONNX minimum speech segment duration in seconds.",
+    ),
+    diarization_min_duration_off: float = Query(
+        0.2,
+        ge=0.0,
+        description="Sherpa-ONNX minimum silence/gap duration between speech regions in seconds.",
+    ),
+    diarization_merge_gap: float = Query(
+        0.2,
+        ge=0.0,
+        description="Maximum gap in seconds for merging adjacent segments of the same speaker.",
+    ),
+    diarization_min_segment_duration: float = Query(
+        0.3,
+        ge=0.0,
+        description="Minimum final speaker segment duration in seconds.",
     ),
     result_format: ExportFormat = Query(
         "docx",
@@ -649,10 +692,13 @@ async def submit_transcription_url(
         language_detection_threshold=language_detection_threshold,
         language_detection_segments=language_detection_segments,
         diarization=diarization,
-        diarization_model=diarization_model,
         num_speakers=num_speakers,
-        min_speakers=min_speakers,
-        max_speakers=max_speakers,
+        diarization_num_threads=diarization_num_threads,
+        diarization_cluster_threshold=diarization_cluster_threshold,
+        diarization_min_duration_on=diarization_min_duration_on,
+        diarization_min_duration_off=diarization_min_duration_off,
+        diarization_merge_gap=diarization_merge_gap,
+        diarization_min_segment_duration=diarization_min_segment_duration,
         result_format=result_format,
         export_timestamps=export_timestamps,
         save_source=save_source,

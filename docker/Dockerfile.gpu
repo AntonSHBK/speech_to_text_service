@@ -1,4 +1,5 @@
 FROM nvidia/cuda:12.6.2-cudnn-runtime-ubuntu22.04
+# FROM nvidia/cuda:12.6.2-cudnn-devel-ubuntu22.04
 
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
@@ -12,6 +13,9 @@ RUN set -eux; \
         xz-utils \
         ffmpeg \
         build-essential \
+        cmake \
+        ninja-build \
+        git \
         ca-certificates \
         libssl-dev \
         zlib1g-dev \
@@ -48,6 +52,37 @@ WORKDIR /app
 COPY requirements.txt ./
 RUN python3.12 -m pip install --no-cache-dir --upgrade pip setuptools wheel \
     && python3.12 -m pip install --no-cache-dir -r requirements.txt
+
+# ARG SHERPA_ONNX_VERSION=1.13.4
+
+# RUN set -eux; \
+#     git clone \
+#         --branch "v${SHERPA_ONNX_VERSION}" \
+#         --depth 1 \
+#         https://github.com/k2-fsa/sherpa-onnx.git \
+#         /tmp/sherpa-onnx; \
+#     cd /tmp/sherpa-onnx; \
+#     SHERPA_ONNX_CMAKE_ARGS=" \
+#         -DCMAKE_BUILD_TYPE=Release \
+#         -DBUILD_SHARED_LIBS=ON \
+#         -DSHERPA_ONNX_ENABLE_GPU=ON \
+#         -DSHERPA_ONNX_ENABLE_PYTHON=ON \
+#         -DSHERPA_ONNX_ENABLE_SPEAKER_DIARIZATION=ON \
+#         -DSHERPA_ONNX_ENABLE_CHECK=OFF \
+#         -DSHERPA_ONNX_ENABLE_TESTS=OFF \
+#         -DSHERPA_ONNX_ENABLE_PORTAUDIO=OFF \
+#         -DSHERPA_ONNX_ENABLE_WEBSOCKET=OFF \
+#         -DSHERPA_ONNX_ENABLE_BINARY=OFF \
+#         -DSHERPA_ONNX_BUILD_C_API_EXAMPLES=OFF \
+#     " \
+#     CMAKE_BUILD_PARALLEL_LEVEL=2 \
+#         python3.12 -m pip install \
+#             --verbose \
+#             --no-cache-dir \
+#             --no-build-isolation \
+#             .; \
+#     python3.12 -c "import sherpa_onnx; print('sherpa-onnx:', sherpa_onnx.__version__); print(sherpa_onnx.__file__)"; \
+#     rm -rf /tmp/sherpa-onnx
 
 COPY . .
 

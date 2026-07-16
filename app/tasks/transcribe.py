@@ -6,7 +6,7 @@ import subprocess
 from celery.signals import worker_process_init
 
 from app.celery_app import celery_app
-from app.models.catalog import ModelDiarizationType, ModelTranscribeSize, resolve_model_name
+from app.models.catalog import ModelTranscribeSize, resolve_model_name
 from app.service.source_downloader import download_source
 from app.service.queue_tracker import mark_task_started
 from app.service.transcriber import transcriber_service
@@ -162,6 +162,7 @@ def init_transcriber_worker(**kwargs):
         compute_type=compute_type,
         cpu_threads=settings.MODEL_CPU_THREADS,
         num_workers=settings.MODEL_NUM_CPU_WORKERS,
+        local_files_only=settings.MODEL_LOCAL_FILES_ONLY,
     )
     logger.info("Инициализация модели по умолчанию завершена: %s", default_model_name)
     logger.info("Модели будут сохраняться в памяти между задачами.")
@@ -211,10 +212,13 @@ def process_transcription(
     language_detection_threshold: float | None = 0.5,
     language_detection_segments: int = 1,
     diarization: bool = False,
-    diarization_model: ModelDiarizationType = "pyannote_1",
     num_speakers: int | None = None,
-    min_speakers: int | None = None,
-    max_speakers: int | None = None,
+    diarization_num_threads: int | None = None,
+    diarization_cluster_threshold: float = 1.0,
+    diarization_min_duration_on: float = 0.4,
+    diarization_min_duration_off: float = 0.4,
+    diarization_merge_gap: float = 0.2,
+    diarization_min_segment_duration: float = 0.3,
     result_format: ExportFormat = "docx",
     export_timestamps: bool = False,
     save_source: bool = False,
@@ -302,6 +306,7 @@ def process_transcription(
             compute_type=compute_type,
             cpu_threads=settings.MODEL_CPU_THREADS,
             num_workers=settings.MODEL_NUM_CPU_WORKERS,
+            local_files_only=settings.MODEL_LOCAL_FILES_ONLY,
         )
 
         def _transcription_progress(progress: float):
@@ -356,23 +361,43 @@ def process_transcription(
         if diarization:
             transcriber_service.release()
 
-            from app.service.speaker_diarization import diary_service
-            from pyannote.audio.pipelines.utils.hook import ProgressHook
+            from app.service.speaker_diarization import (
+                PyannoteSpeakerDiarizationService,
+                SherpaSpeakerDiarizationService,
+                diary_service,
+            )
 
             def _diarization_progress(progress: float):
                 stage_progress["diarization"] = max(0.0, min(100.0, float(progress)))
                 _emit_progress()
 
             try:
-                with ProgressHook() as active_hook:
+                if isinstance(diary_service, PyannoteSpeakerDiarizationService):
+                    from pyannote.audio.pipelines.utils.hook import ProgressHook
+
+                    with ProgressHook() as active_hook:
+                        diarization_result = diary_service.diarize(
+                            audio_path=input_path,
+                            hook=active_hook,
+                            num_speakers=num_speakers,
+                            on_progress=_diarization_progress,
+                        )
+                elif isinstance(diary_service, SherpaSpeakerDiarizationService):
                     diarization_result = diary_service.diarize(
                         audio_path=input_path,
-                        model=diarization_model,
-                        hook=active_hook,
                         num_speakers=num_speakers,
-                        min_speakers=min_speakers,
-                        max_speakers=max_speakers,
                         on_progress=_diarization_progress,
+                        provider=settings.DEVICE,
+                        cluster_threshold=diarization_cluster_threshold,
+                        num_threads=diarization_num_threads,
+                        min_duration_on=diarization_min_duration_on,
+                        min_duration_off=diarization_min_duration_off,
+                        merge_gap=diarization_merge_gap,
+                        min_segment_duration=diarization_min_segment_duration,
+                    )
+                else:
+                    raise TypeError(
+                        f"Unknown diarization service: {type(diary_service).__name__}"
                     )
 
                 result["diarization"] = diarization_result

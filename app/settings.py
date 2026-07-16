@@ -45,6 +45,8 @@ class Settings(BaseSettings):
     
     MODEL_CPU_THREADS: int = 0
     MODEL_NUM_CPU_WORKERS: int = 1
+    MODEL_LOCAL_FILES_ONLY: bool = False
+    DIARIZATION_LOCAL_FILES_ONLY: bool = False
     MODEL_COMPUTE_TYPE: ModelComputeType = "default"
     MODEL_COMPUTE_TYPE_SMALL: ModelComputeType = "default"
     MODEL_COMPUTE_TYPE_MEDIUM: ModelComputeType = "default"

@@ -18,6 +18,7 @@ class FastWhisperTranscriber(BaseModel):
         compute_type: str = "default",
         cpu_threads: int = 0,
         num_workers: int = 1,
+        local_files_only: bool = False,
     ):
         super().__init__(model_name, cache_dir, device)
         self.model = self.load_model(
@@ -26,6 +27,7 @@ class FastWhisperTranscriber(BaseModel):
             compute_type=compute_type,
             cpu_threads=cpu_threads,
             num_workers=num_workers,
+            local_files_only=local_files_only,
         )
 
     def load_model(
@@ -35,6 +37,7 @@ class FastWhisperTranscriber(BaseModel):
         compute_type: str = "default",
         cpu_threads: int = 0,
         num_workers: int = 1,
+        local_files_only: bool = False,
     ) -> WhisperModel:
         model = WhisperModel(
             model_size_or_path=model_name,
@@ -44,6 +47,7 @@ class FastWhisperTranscriber(BaseModel):
             compute_type=compute_type,
             cpu_threads=cpu_threads,
             num_workers=num_workers,
+            local_files_only=local_files_only,
         )
         self.logger.info("Модель загружена: %s", model_name)
         return model
