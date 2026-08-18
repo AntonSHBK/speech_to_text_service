@@ -56,7 +56,7 @@ class Settings(BaseSettings):
     CELERY_BROKER_URL: str = "redis://localhost:6379/0"
     CELERY_RESULT_BACKEND: str = "redis://localhost:6379/0"
     YTDLP_SOCKET_TIMEOUT_SEC: int = 180
-    YTDLP_MAX_DURATION_SEC: int = 10800
+    YTDLP_MAX_DURATION_SEC: int = 14400
     HF_TOKEN: str | None = None
 
     model_config = SettingsConfigDict(
