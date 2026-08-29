@@ -4,9 +4,12 @@ from typing import Literal
 from app.utils.exporters.docx_exporter import export_docx
 from app.utils.exporters.markdown_exporter import export_markdown
 from app.utils.exporters.pdf_exporter import export_pdf
+from app.utils.exporters.ass_exporter import export_ass
+from app.utils.exporters.srt_exporter import export_srt
 from app.utils.exporters.txt_exporter import export_txt
+from app.utils.exporters.vtt_exporter import export_vtt
 
-ExportFormat = Literal["docx", "txt", "md", "pdf"]
+ExportFormat = Literal["docx", "txt", "md", "pdf", "srt", "vtt", "ass"]
 
 
 def export_result(
@@ -50,5 +53,11 @@ def export_result(
                 paragraph_pause_sec=paragraph_pause_sec,
                 paragraph_max_chars=paragraph_max_chars,
             )
+        case "srt":
+            return export_srt(result, path)
+        case "vtt":
+            return export_vtt(result, path)
+        case "ass":
+            return export_ass(result, path)
         case _:
             raise ValueError(f"Unsupported export format: {format}")

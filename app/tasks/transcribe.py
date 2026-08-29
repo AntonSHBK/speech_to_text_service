@@ -1,5 +1,4 @@
 from pathlib import Path
-import json
 import torchaudio
 import subprocess
 
@@ -20,6 +19,52 @@ TRANSCRIPTION_WEIGHT = 0.50
 DIARIZATION_WEIGHT = 0.50
 GPU_RETRY_COUNTDOWN_SEC = 60
 GPU_MAX_RETRIES = 3
+
+# Параметры faster-whisper, общие для всех задач транскрибации.
+TRANSCRIPTION_TASK = "transcribe"
+TRANSCRIPTION_LOG_PROGRESS = False
+TRANSCRIPTION_BEAM_SIZE = 3
+TRANSCRIPTION_BEST_OF = 3
+TRANSCRIPTION_PATIENCE = 1.0
+TRANSCRIPTION_LENGTH_PENALTY = 1.0
+TRANSCRIPTION_REPETITION_PENALTY = 1.0
+TRANSCRIPTION_NO_REPEAT_NGRAM_SIZE = 0
+TRANSCRIPTION_TEMPERATURE = [0.0, 0.2, 0.4, 0.6, 0.8, 1.0]
+TRANSCRIPTION_COMPRESSION_RATIO_THRESHOLD = 2.4
+TRANSCRIPTION_LOG_PROB_THRESHOLD = -1.0
+TRANSCRIPTION_NO_SPEECH_THRESHOLD = 0.6
+TRANSCRIPTION_CONDITION_ON_PREVIOUS_TEXT = False
+TRANSCRIPTION_PROMPT_RESET_ON_TEMPERATURE = 0.5
+TRANSCRIPTION_INITIAL_PROMPT = None
+TRANSCRIPTION_PREFIX = None
+TRANSCRIPTION_SUPPRESS_BLANK = True
+TRANSCRIPTION_SUPPRESS_TOKENS = [-1]
+TRANSCRIPTION_WITHOUT_TIMESTAMPS = False
+TRANSCRIPTION_MAX_INITIAL_TIMESTAMP = 1.0
+TRANSCRIPTION_WORD_TIMESTAMPS = False
+TRANSCRIPTION_PREPEND_PUNCTUATIONS = "\"'“¿([{-"
+TRANSCRIPTION_APPEND_PUNCTUATIONS = "\"'.。,，!！?？:：”)]}、"
+TRANSCRIPTION_MULTILINGUAL = False
+TRANSCRIPTION_VAD_FILTER = True
+TRANSCRIPTION_VAD_PARAMETERS = {
+    "min_silence_duration_ms": 500,
+    "speech_pad_ms": 200,
+}
+TRANSCRIPTION_MAX_NEW_TOKENS = None
+TRANSCRIPTION_CHUNK_LENGTH = None
+TRANSCRIPTION_CLIP_TIMESTAMPS = "0"
+TRANSCRIPTION_HALLUCINATION_SILENCE_THRESHOLD = None
+TRANSCRIPTION_HOTWORDS = None
+TRANSCRIPTION_LANGUAGE_DETECTION_THRESHOLD = 0.5
+TRANSCRIPTION_LANGUAGE_DETECTION_SEGMENTS = 1
+
+# Параметры Sherpa-ONNX diarization, общие для всех задач.
+DIARIZATION_NUM_THREADS = 2
+DIARIZATION_CLUSTER_THRESHOLD = 1.0
+DIARIZATION_MIN_DURATION_ON = 0.4
+DIARIZATION_MIN_DURATION_OFF = 0.4
+DIARIZATION_MERGE_GAP = 0.2
+DIARIZATION_MIN_SEGMENT_DURATION = 0.3
 
 
 def _is_retryable_gpu_error(exc: Exception) -> bool:
@@ -176,54 +221,14 @@ def process_transcription(
     source_url: str | None = None,
     model: ModelTranscribeSize = "large",
     language: str | None = None,
-    task: str = "transcribe",
-    log_progress: bool = False,
-    beam_size: int = 3,
-    best_of: int = 3,
-    patience: float = 1.0,
-    length_penalty: float = 1.0,
-    repetition_penalty: float = 1.0,
-    no_repeat_ngram_size: int = 0,
-    temperature: list[float] | float = (0.0, 0.2, 0.4, 0.6, 0.8, 1.0),
-    compression_ratio_threshold: float | None = 2.4,
-    log_prob_threshold: float | None = -1.0,
-    no_speech_threshold: float | None = 0.6,
-    condition_on_previous_text: bool = False,
-    prompt_reset_on_temperature: float = 0.5,
-    initial_prompt: str | None = None,
-    prefix: str | None = None,
-    suppress_blank: bool = True,
-    suppress_tokens: list[int] | None = None,
-    without_timestamps: bool = False,
-    max_initial_timestamp: float = 1.0,
-    word_timestamps: bool = False,
-    prepend_punctuations: str = "\"'“¿([{-",
-    append_punctuations: str = "\"'.。,，!！?？:：”)]}、",
-    multilingual: bool = False,
-    vad_filter: bool = True,
-    vad_parameters: str | None = (
-        '{"min_silence_duration_ms":500,"speech_pad_ms":200}'
-    ),
-    max_new_tokens: int | None = None,
-    chunk_length: int | None = None,
-    clip_timestamps: str = "0",
-    hallucination_silence_threshold: float | None = None,
-    hotwords: str | None = None,
-    language_detection_threshold: float | None = 0.5,
-    language_detection_segments: int = 1,
     diarization: bool = False,
     num_speakers: int | None = None,
-    diarization_num_threads: int | None = None,
-    diarization_cluster_threshold: float = 1.0,
-    diarization_min_duration_on: float = 0.4,
-    diarization_min_duration_off: float = 0.4,
-    diarization_merge_gap: float = 0.2,
-    diarization_min_segment_duration: float = 0.3,
     result_format: ExportFormat = "docx",
     export_timestamps: bool = False,
     save_source: bool = False,
     save_result: bool = True,
 ) -> dict:
+
     input_path = Path(audio_path) if audio_path else None
     result_file = None
     media_duration_sec: float | None = None
@@ -263,13 +268,6 @@ def process_transcription(
         )
 
     _emit_progress()
-
-    parsed_vad_parameters = None
-    if vad_parameters:
-        try:
-            parsed_vad_parameters = json.loads(vad_parameters)
-        except json.JSONDecodeError as exc:
-            raise ValueError("Некорректный JSON в vad_parameters") from exc
 
     retry_scheduled = False
 
@@ -316,39 +314,39 @@ def process_transcription(
         result = transcriber.transcribe(
             input_path,
             language=language,
-            task=task,
-            log_progress=log_progress,
-            beam_size=beam_size,
-            best_of=best_of,
-            patience=patience,
-            length_penalty=length_penalty,
-            repetition_penalty=repetition_penalty,
-            no_repeat_ngram_size=no_repeat_ngram_size,
-            temperature=temperature,
-            compression_ratio_threshold=compression_ratio_threshold,
-            log_prob_threshold=log_prob_threshold,
-            no_speech_threshold=no_speech_threshold,
-            condition_on_previous_text=condition_on_previous_text,
-            prompt_reset_on_temperature=prompt_reset_on_temperature,
-            initial_prompt=initial_prompt,
-            prefix=prefix,
-            suppress_blank=suppress_blank,
-            suppress_tokens=suppress_tokens,
-            without_timestamps=without_timestamps,
-            max_initial_timestamp=max_initial_timestamp,
-            word_timestamps=word_timestamps,
-            prepend_punctuations=prepend_punctuations,
-            append_punctuations=append_punctuations,
-            multilingual=multilingual,
-            vad_filter=vad_filter,
-            vad_parameters=parsed_vad_parameters,
-            max_new_tokens=max_new_tokens,
-            chunk_length=chunk_length,
-            clip_timestamps=clip_timestamps,
-            hallucination_silence_threshold=hallucination_silence_threshold,
-            hotwords=hotwords,
-            language_detection_threshold=language_detection_threshold,
-            language_detection_segments=language_detection_segments,
+            task=TRANSCRIPTION_TASK,
+            log_progress=TRANSCRIPTION_LOG_PROGRESS,
+            beam_size=TRANSCRIPTION_BEAM_SIZE,
+            best_of=TRANSCRIPTION_BEST_OF,
+            patience=TRANSCRIPTION_PATIENCE,
+            length_penalty=TRANSCRIPTION_LENGTH_PENALTY,
+            repetition_penalty=TRANSCRIPTION_REPETITION_PENALTY,
+            no_repeat_ngram_size=TRANSCRIPTION_NO_REPEAT_NGRAM_SIZE,
+            temperature=TRANSCRIPTION_TEMPERATURE,
+            compression_ratio_threshold=TRANSCRIPTION_COMPRESSION_RATIO_THRESHOLD,
+            log_prob_threshold=TRANSCRIPTION_LOG_PROB_THRESHOLD,
+            no_speech_threshold=TRANSCRIPTION_NO_SPEECH_THRESHOLD,
+            condition_on_previous_text=TRANSCRIPTION_CONDITION_ON_PREVIOUS_TEXT,
+            prompt_reset_on_temperature=TRANSCRIPTION_PROMPT_RESET_ON_TEMPERATURE,
+            initial_prompt=TRANSCRIPTION_INITIAL_PROMPT,
+            prefix=TRANSCRIPTION_PREFIX,
+            suppress_blank=TRANSCRIPTION_SUPPRESS_BLANK,
+            suppress_tokens=TRANSCRIPTION_SUPPRESS_TOKENS,
+            without_timestamps=TRANSCRIPTION_WITHOUT_TIMESTAMPS,
+            max_initial_timestamp=TRANSCRIPTION_MAX_INITIAL_TIMESTAMP,
+            word_timestamps=TRANSCRIPTION_WORD_TIMESTAMPS,
+            prepend_punctuations=TRANSCRIPTION_PREPEND_PUNCTUATIONS,
+            append_punctuations=TRANSCRIPTION_APPEND_PUNCTUATIONS,
+            multilingual=TRANSCRIPTION_MULTILINGUAL,
+            vad_filter=TRANSCRIPTION_VAD_FILTER,
+            vad_parameters=TRANSCRIPTION_VAD_PARAMETERS,
+            max_new_tokens=TRANSCRIPTION_MAX_NEW_TOKENS,
+            chunk_length=TRANSCRIPTION_CHUNK_LENGTH,
+            clip_timestamps=TRANSCRIPTION_CLIP_TIMESTAMPS,
+            hallucination_silence_threshold=TRANSCRIPTION_HALLUCINATION_SILENCE_THRESHOLD,
+            hotwords=TRANSCRIPTION_HOTWORDS,
+            language_detection_threshold=TRANSCRIPTION_LANGUAGE_DETECTION_THRESHOLD,
+            language_detection_segments=TRANSCRIPTION_LANGUAGE_DETECTION_SEGMENTS,
             on_progress=_transcription_progress,
         )
         result_duration = result.get("duration")
@@ -388,12 +386,12 @@ def process_transcription(
                         num_speakers=num_speakers,
                         on_progress=_diarization_progress,
                         provider=settings.DEVICE,
-                        cluster_threshold=diarization_cluster_threshold,
-                        num_threads=diarization_num_threads,
-                        min_duration_on=diarization_min_duration_on,
-                        min_duration_off=diarization_min_duration_off,
-                        merge_gap=diarization_merge_gap,
-                        min_segment_duration=diarization_min_segment_duration,
+                        cluster_threshold=DIARIZATION_CLUSTER_THRESHOLD,
+                        num_threads=DIARIZATION_NUM_THREADS,
+                        min_duration_on=DIARIZATION_MIN_DURATION_ON,
+                        min_duration_off=DIARIZATION_MIN_DURATION_OFF,
+                        merge_gap=DIARIZATION_MERGE_GAP,
+                        min_segment_duration=DIARIZATION_MIN_SEGMENT_DURATION,
                     )
                 else:
                     raise TypeError(

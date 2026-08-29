@@ -1,0 +1,95 @@
+name: speech_to_text_service
+
+services:
+  speech-to-text-service:
+    build:
+      context: ../
+      dockerfile: ./docker/Dockerfile.gpu
+    volumes:
+      - ../:/app/
+      - ../logs:/app/logs
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
+    env_file:
+      - ./.env
+    ports:
+      - "8000:8000"
+    depends_on:
+      - redis
+    networks:
+      - shared_net
+    restart: unless-stopped
+
+  worker-1:
+    build:
+      context: ../
+      dockerfile: ./docker/Dockerfile.gpu
+    volumes:
+      - ../:/app/
+      - ../logs:/app/logs
+    command: celery -A app.celery_worker.celery_app worker --loglevel=info --events --pool=solo --concurrency=1 --hostname=worker-1@%h
+    env_file:
+      - ./.env
+    environment:
+      - WORKER_NAME=worker-1
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+    gpus: all
+    depends_on:
+      - redis
+    networks:
+      - shared_net
+    restart: unless-stopped
+
+  beat:
+    build:
+      context: ../
+      dockerfile: ./docker/Dockerfile.gpu
+    volumes:
+      - ../:/app/
+      - ../logs:/app/logs
+      - beat_data:/data
+    command: celery -A app.celery_worker.celery_app beat --loglevel=info --schedule=/data/celerybeat-schedule
+    env_file:
+      - ./.env
+    depends_on:
+      - redis
+    networks:
+      - shared_net
+    restart: unless-stopped
+
+  flower:
+    build:
+      context: ../
+      dockerfile: ./docker/Dockerfile.gpu
+    command: celery -A app.celery_worker.celery_app flower --port=5555 --basic_auth=${FLOWER_BASIC_AUTH} --persistent=True --db=/data/flower.db
+    env_file:
+      - ./.env
+    volumes:
+      - flower_data:/data
+    depends_on:
+      - redis
+      - worker-1
+    ports:
+      - "5555:5555"
+    networks:
+      - shared_net
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    networks:
+      - shared_net
+    restart: unless-stopped
+
+networks:
+  shared_net:
+    driver: bridge
+    external: true
+
+volumes:
+  redis_data:
+  beat_data:
+  flower_data:

@@ -16,13 +16,6 @@ from app.utils.export import ExportFormat
 router = APIRouter(tags=["Транскрибация"])
 
 
-DEFAULT_TEMPERATURE = [0.0, 0.2, 0.4, 0.6, 0.8, 1.0]
-DEFAULT_SUPPRESS_TOKENS = [-1]
-DEFAULT_VAD_PARAMETERS = (
-    '{"min_silence_duration_ms":500,"speech_pad_ms":200}'
-)
-
-
 def _normalize_optional_language(language: str | None) -> str | None:
     if language is None:
         return None
@@ -39,47 +32,8 @@ def _enqueue_transcription_task(
     source_url: str | None = None,
     model: ModelTranscribeSize = "large",
     language: Optional[str] = None,
-    task: str = "transcribe",
-    log_progress: bool = False,
-    beam_size: int = 3,
-    best_of: int = 3,
-    patience: float = 1.0,
-    length_penalty: float = 1.0,
-    repetition_penalty: float = 1.0,
-    no_repeat_ngram_size: int = 0,
-    temperature: list[float] = DEFAULT_TEMPERATURE,
-    compression_ratio_threshold: float | None = 2.4,
-    log_prob_threshold: float | None = -1.0,
-    no_speech_threshold: float | None = 0.6,
-    condition_on_previous_text: bool = False,
-    prompt_reset_on_temperature: float = 0.5,
-    initial_prompt: str | None = None,
-    prefix: str | None = None,
-    suppress_blank: bool = True,
-    suppress_tokens: list[int] = DEFAULT_SUPPRESS_TOKENS,
-    without_timestamps: bool = False,
-    max_initial_timestamp: float = 1.0,
-    word_timestamps: bool = False,
-    prepend_punctuations: str = "\"'“¿([{-",
-    append_punctuations: str = "\"'.。,，!！?？:：”)]}、",
-    multilingual: bool = False,
-    vad_filter: bool = True,
-    vad_parameters: str | None = DEFAULT_VAD_PARAMETERS,
-    max_new_tokens: int | None = None,
-    chunk_length: int | None = None,
-    clip_timestamps: str = "0",
-    hallucination_silence_threshold: float | None = None,
-    hotwords: str | None = None,
-    language_detection_threshold: float | None = 0.5,
-    language_detection_segments: int = 1,
     diarization: bool = False,
     num_speakers: int | None = None,
-    diarization_num_threads: int = 2,
-    diarization_cluster_threshold: float = 1.0,
-    diarization_min_duration_on: float = 0.4,
-    diarization_min_duration_off: float = 0.4,
-    diarization_merge_gap: float = 0.2,
-    diarization_min_segment_duration: float = 0.3,
     result_format: ExportFormat = "docx",
     export_timestamps: bool = False,
     save_source: bool = False,
@@ -93,47 +47,8 @@ def _enqueue_transcription_task(
         source_url=source_url,
         model=model,
         language=language,
-        task=task,
-        log_progress=log_progress,
-        beam_size=beam_size,
-        best_of=best_of,
-        patience=patience,
-        length_penalty=length_penalty,
-        repetition_penalty=repetition_penalty,
-        no_repeat_ngram_size=no_repeat_ngram_size,
-        temperature=temperature,
-        compression_ratio_threshold=compression_ratio_threshold,
-        log_prob_threshold=log_prob_threshold,
-        no_speech_threshold=no_speech_threshold,
-        condition_on_previous_text=condition_on_previous_text,
-        prompt_reset_on_temperature=prompt_reset_on_temperature,
-        initial_prompt=initial_prompt,
-        prefix=prefix,
-        suppress_blank=suppress_blank,
-        suppress_tokens=suppress_tokens,
-        without_timestamps=without_timestamps,
-        max_initial_timestamp=max_initial_timestamp,
-        word_timestamps=word_timestamps,
-        prepend_punctuations=prepend_punctuations,
-        append_punctuations=append_punctuations,
-        multilingual=multilingual,
-        vad_filter=vad_filter,
-        vad_parameters=vad_parameters,
-        max_new_tokens=max_new_tokens,
-        chunk_length=chunk_length,
-        clip_timestamps=clip_timestamps,
-        hallucination_silence_threshold=hallucination_silence_threshold,
-        hotwords=hotwords,
-        language_detection_threshold=language_detection_threshold,
-        language_detection_segments=language_detection_segments,
         diarization=diarization,
         num_speakers=num_speakers,
-        diarization_num_threads=diarization_num_threads,
-        diarization_cluster_threshold=diarization_cluster_threshold,
-        diarization_min_duration_on=diarization_min_duration_on,
-        diarization_min_duration_off=diarization_min_duration_off,
-        diarization_merge_gap=diarization_merge_gap,
-        diarization_min_segment_duration=diarization_min_segment_duration,
         result_format=result_format,
         export_timestamps=export_timestamps,
         save_source=save_source,
@@ -160,159 +75,6 @@ async def submit_transcription_file(
         None,
         description="Код языка речи (например: ru, en). Если не задан, язык определяется автоматически.",
     ),
-    task: str = Query(
-        "transcribe",
-        description="Задача: transcribe (транскрибация) или translate (перевод).",
-    ),
-    log_progress: bool = Query(
-        False,
-        description="Включить встроенный прогресс faster-whisper.",
-    ),
-    beam_size: int = Query(
-        3,
-        ge=1,
-        le=20,
-        description="Размер beam search.",
-    ),
-    best_of: int = Query(
-        3,
-        ge=1,
-        le=20,
-        description="Количество кандидатов при sampling (для ненулевой температуры).",
-    ),
-    patience: float = Query(
-        1.0,
-        ge=0.0,
-        description="Коэффициент терпения для beam search.",
-    ),
-    length_penalty: float = Query(
-        1.0,
-        ge=0.0,
-        description="Штраф за длину последовательности.",
-    ),
-    repetition_penalty: float = Query(
-        1.1,
-        ge=0.0,
-        description="Штраф за повтор токенов (>1 усиливает штраф).",
-    ),
-    no_repeat_ngram_size: int = Query(
-        0,
-        ge=0,
-        description="Запрет повторения n-грамм.",
-    ),
-    temperature: list[float] = Query(
-        DEFAULT_TEMPERATURE,
-        description="Температура декодирования.",
-    ),
-    compression_ratio_threshold: float | None = Query(
-        2.4,
-        description="Порог коэффициента сжатия gzip для детекции неудачного результата.",
-    ),
-    log_prob_threshold: float | None = Query(
-        -1.0,
-        description="Порог средней лог-вероятности токенов.",
-    ),
-    no_speech_threshold: float | None = Query(
-        0.6,
-        description="Порог вероятности отсутствия речи.",
-    ),
-    condition_on_previous_text: bool = Query(
-        False,
-        description="Использовать предыдущий текст как prompt для следующего окна.",
-    ),
-    prompt_reset_on_temperature: float = Query(
-        0.5,
-        description="Сбрасывать prompt при температуре выше этого порога.",
-    ),
-    initial_prompt: str | None = Query(
-        None,
-        description=(
-            "Начальный prompt для первого окна. Если не задан, модель работает "
-            "без дополнительной инструкции. Пример: Ставь точки, запятые, вопросительные знаки и дели текст на предложения."
-        )
-    ),
-    prefix: str | None = Query(
-        None,
-        description="Текстовый префикс для первого окна.",
-    ),
-    suppress_blank: bool = Query(
-        True,
-        description="Подавлять пустые токены в начале генерации.",
-    ),
-    suppress_tokens: list[int] = Query(
-        DEFAULT_SUPPRESS_TOKENS,
-        description="Список ID токенов для подавления. -1 = стандартный список non-speech токенов.",
-    ),
-    without_timestamps: bool = Query(
-        False,
-        description="Генерировать только текст без таймкодов.",
-    ),
-    max_initial_timestamp: float = Query(
-        1.0,
-        ge=0.0,
-        description="Максимальное значение начального таймкода.",
-    ),
-    word_timestamps: bool = Query(
-        False,
-        description="Извлекать таймкоды на уровне слов.",
-    ),
-    prepend_punctuations: str = Query(
-        "\"'“¿([{-",
-        description="Знаки пунктуации, присоединяемые к следующему слову при word_timestamps=True.",
-    ),
-    append_punctuations: str = Query(
-        "\"'.。,，!！?？:：”)]}、",
-        description="Знаки пунктуации, присоединяемые к предыдущему слову при word_timestamps=True.",
-    ),
-    multilingual: bool = Query(
-        False,
-        description="Определять язык для каждого сегмента.",
-    ),
-    vad_filter: bool = Query(
-        True,
-        description="Включить VAD (Silero) для удаления участков без речи.",
-    ),
-    vad_parameters: str | None = Query(
-        DEFAULT_VAD_PARAMETERS,
-        description=(
-            "Параметры VAD в JSON-строке. По умолчанию: "
-            '{"min_silence_duration_ms":500,"speech_pad_ms":200}.'
-        ),
-    ),
-    max_new_tokens: int | None = Query(
-        None,
-        ge=1,
-        description="Максимум новых токенов на сегмент.",
-    ),
-    chunk_length: int | None = Query(
-        None,
-        ge=1,
-        description="Длина чанка аудио (сек), переопределяет настройку FeatureExtractor.",
-    ),
-    clip_timestamps: str = Query(
-        "0",
-        description="Список интервалов в секундах: start,end,start,end,...",
-    ),
-    hallucination_silence_threshold: float | None = Query(
-        None,
-        ge=0.0,
-        description="Порог тишины для фильтрации возможных галлюцинаций при word_timestamps=True.",
-    ),
-    hotwords: str | None = Query(
-        None,
-        description="Ключевые слова/подсказки для модели.",
-    ),
-    language_detection_threshold: float | None = Query(
-        0.5,
-        ge=0.0,
-        le=1.0,
-        description="Порог уверенности для определения языка.",
-    ),
-    language_detection_segments: int = Query(
-        1,
-        ge=1,
-        description="Количество сегментов для определения языка.",
-    ),
     diarization: bool = Query(
         False,
         description="Включить diarization (разметку спикеров).",
@@ -322,40 +84,12 @@ async def submit_transcription_file(
         ge=1,
         description="Exact number of speakers for Sherpa-ONNX, if known.",
     ),
-    diarization_num_threads: int = Query(
-        2,
-        ge=1,
-        description="Sherpa-ONNX CPU thread count for diarization.",
-    ),
-    diarization_cluster_threshold: float = Query(
-        1.0,
-        gt=0.0,
-        le=1.0,
-        description="Sherpa-ONNX clustering threshold. Higher values merge similar voices more aggressively.",
-    ),
-    diarization_min_duration_on: float = Query(
-        0.2,
-        ge=0.0,
-        description="Sherpa-ONNX minimum speech segment duration in seconds.",
-    ),
-    diarization_min_duration_off: float = Query(
-        0.2,
-        ge=0.0,
-        description="Sherpa-ONNX minimum silence/gap duration between speech regions in seconds.",
-    ),
-    diarization_merge_gap: float = Query(
-        0.2,
-        ge=0.0,
-        description="Maximum gap in seconds for merging adjacent segments of the same speaker.",
-    ),
-    diarization_min_segment_duration: float = Query(
-        0.3,
-        ge=0.0,
-        description="Minimum final speaker segment duration in seconds.",
-    ),
     result_format: ExportFormat = Query(
         "docx",
-        description="Формат экспортируемого файла результата.",
+        description=(
+            "Формат экспортируемого файла результата: docx, txt, md, pdf, "
+            "srt, vtt или ass."
+        ),
     ),
     export_timestamps: bool = Query(
         False,
@@ -381,47 +115,8 @@ async def submit_transcription_file(
         source_filename=filename.name,
         model=model,
         language=language,
-        task=task,
-        log_progress=log_progress,
-        beam_size=beam_size,
-        best_of=best_of,
-        patience=patience,
-        length_penalty=length_penalty,
-        repetition_penalty=repetition_penalty,
-        no_repeat_ngram_size=no_repeat_ngram_size,
-        temperature=temperature,
-        compression_ratio_threshold=compression_ratio_threshold,
-        log_prob_threshold=log_prob_threshold,
-        no_speech_threshold=no_speech_threshold,
-        condition_on_previous_text=condition_on_previous_text,
-        prompt_reset_on_temperature=prompt_reset_on_temperature,
-        initial_prompt=initial_prompt,
-        prefix=prefix,
-        suppress_blank=suppress_blank,
-        suppress_tokens=suppress_tokens,
-        without_timestamps=without_timestamps,
-        max_initial_timestamp=max_initial_timestamp,
-        word_timestamps=word_timestamps,
-        prepend_punctuations=prepend_punctuations,
-        append_punctuations=append_punctuations,
-        multilingual=multilingual,
-        vad_filter=vad_filter,
-        vad_parameters=vad_parameters,
-        max_new_tokens=max_new_tokens,
-        chunk_length=chunk_length,
-        clip_timestamps=clip_timestamps,
-        hallucination_silence_threshold=hallucination_silence_threshold,
-        hotwords=hotwords,
-        language_detection_threshold=language_detection_threshold,
-        language_detection_segments=language_detection_segments,
         diarization=diarization,
         num_speakers=num_speakers,
-        diarization_num_threads=diarization_num_threads,
-        diarization_cluster_threshold=diarization_cluster_threshold,
-        diarization_min_duration_on=diarization_min_duration_on,
-        diarization_min_duration_off=diarization_min_duration_off,
-        diarization_merge_gap=diarization_merge_gap,
-        diarization_min_segment_duration=diarization_min_segment_duration,
         result_format=result_format,
         export_timestamps=export_timestamps,
         save_source=save_source,
@@ -443,159 +138,6 @@ async def submit_transcription_url(
         None,
         description="Код языка речи (например: ru, en). Если не задан, язык определяется автоматически.",
     ),
-    task: str = Query(
-        "transcribe",
-        description="Задача: transcribe (транскрибация) или translate (перевод).",
-    ),
-    log_progress: bool = Query(
-        False,
-        description="Включить встроенный прогресс faster-whisper.",
-    ),
-    beam_size: int = Query(
-        3,
-        ge=1,
-        le=20,
-        description="Размер beam search.",
-    ),
-    best_of: int = Query(
-        3,
-        ge=1,
-        le=20,
-        description="Количество кандидатов при sampling (для ненулевой температуры).",
-    ),
-    patience: float = Query(
-        1.0,
-        ge=0.0,
-        description="Коэффициент терпения для beam search.",
-    ),
-    length_penalty: float = Query(
-        1.0,
-        ge=0.0,
-        description="Штраф за длину последовательности.",
-    ),
-    repetition_penalty: float = Query(
-        1.1,
-        ge=0.0,
-        description="Штраф за повтор токенов (>1 усиливает штраф).",
-    ),
-    no_repeat_ngram_size: int = Query(
-        0,
-        ge=0,
-        description="Запрет повторения n-грамм (0 = отключено).",
-    ),
-    temperature: list[float] = Query(
-        DEFAULT_TEMPERATURE,
-        description="Температура декодирования. Можно передавать несколько значений как fallback.",
-    ),
-    compression_ratio_threshold: float | None = Query(
-        2.4,
-        description="Порог коэффициента сжатия gzip для детекции неудачного результата.",
-    ),
-    log_prob_threshold: float | None = Query(
-        -1.0,
-        description="Порог средней лог-вероятности токенов.",
-    ),
-    no_speech_threshold: float | None = Query(
-        0.6,
-        description="Порог вероятности отсутствия речи.",
-    ),
-    condition_on_previous_text: bool = Query(
-        False,
-        description="Использовать предыдущий текст как prompt для следующего окна.",
-    ),
-    prompt_reset_on_temperature: float = Query(
-        0.5,
-        description="Сбрасывать prompt при температуре выше этого порога.",
-    ),
-    initial_prompt: str | None = Query(
-        None,
-        description=(
-            "Начальный prompt для первого окна. Если не задан, модель работает "
-            "без дополнительной инструкции. Пример: Ставь точки, запятые, вопросительные знаки и дели текст на предложения."
-        )
-    ),
-    prefix: str | None = Query(
-        None,
-        description="Текстовый префикс для первого окна.",
-    ),
-    suppress_blank: bool = Query(
-        True,
-        description="Подавлять пустые токены в начале генерации.",
-    ),
-    suppress_tokens: list[int] = Query(
-        DEFAULT_SUPPRESS_TOKENS,
-        description="Список ID токенов для подавления. -1 = стандартный список non-speech токенов.",
-    ),
-    without_timestamps: bool = Query(
-        False,
-        description="Генерировать только текст без таймкодов.",
-    ),
-    max_initial_timestamp: float = Query(
-        1.0,
-        ge=0.0,
-        description="Максимальное значение начального таймкода.",
-    ),
-    word_timestamps: bool = Query(
-        False,
-        description="Извлекать таймкоды на уровне слов.",
-    ),
-    prepend_punctuations: str = Query(
-        "\"'“¿([{-",
-        description="Знаки пунктуации, присоединяемые к следующему слову при word_timestamps=True.",
-    ),
-    append_punctuations: str = Query(
-        "\"'.。,，!！?？:：”)]}、",
-        description="Знаки пунктуации, присоединяемые к предыдущему слову при word_timestamps=True.",
-    ),
-    multilingual: bool = Query(
-        False,
-        description="Определять язык для каждого сегмента.",
-    ),
-    vad_filter: bool = Query(
-        True,
-        description="Включить VAD (Silero) для удаления участков без речи.",
-    ),
-    vad_parameters: str | None = Query(
-        DEFAULT_VAD_PARAMETERS,
-        description=(
-            "Параметры VAD в JSON-строке. По умолчанию: "
-            '{"min_silence_duration_ms":500,"speech_pad_ms":200}.'
-        ),
-    ),
-    max_new_tokens: int | None = Query(
-        None,
-        ge=1,
-        description="Максимум новых токенов на сегмент.",
-    ),
-    chunk_length: int | None = Query(
-        None,
-        ge=1,
-        description="Длина чанка аудио (сек), переопределяет настройку FeatureExtractor.",
-    ),
-    clip_timestamps: str = Query(
-        "0",
-        description="Список интервалов в секундах: start,end,start,end,...",
-    ),
-    hallucination_silence_threshold: float | None = Query(
-        None,
-        ge=0.0,
-        description="Порог тишины для фильтрации возможных галлюцинаций при word_timestamps=True.",
-    ),
-    hotwords: str | None = Query(
-        None,
-        description="Ключевые слова/подсказки для модели.",
-    ),
-    language_detection_threshold: float | None = Query(
-        0.5,
-        ge=0.0,
-        le=1.0,
-        description="Порог уверенности для определения языка.",
-    ),
-    language_detection_segments: int = Query(
-        1,
-        ge=1,
-        description="Количество сегментов для определения языка.",
-    ),
     diarization: bool = Query(
         False,
         description="Включить diarization (разметку спикеров).",
@@ -605,40 +147,12 @@ async def submit_transcription_url(
         ge=1,
         description="Exact number of speakers for Sherpa-ONNX, if known.",
     ),
-    diarization_num_threads: int = Query(
-        2,
-        ge=1,
-        description="Sherpa-ONNX CPU thread count for diarization.",
-    ),
-    diarization_cluster_threshold: float = Query(
-        1.0,
-        gt=0.0,
-        le=1.0,
-        description="Sherpa-ONNX clustering threshold. Higher values merge similar voices more aggressively.",
-    ),
-    diarization_min_duration_on: float = Query(
-        0.2,
-        ge=0.0,
-        description="Sherpa-ONNX minimum speech segment duration in seconds.",
-    ),
-    diarization_min_duration_off: float = Query(
-        0.2,
-        ge=0.0,
-        description="Sherpa-ONNX minimum silence/gap duration between speech regions in seconds.",
-    ),
-    diarization_merge_gap: float = Query(
-        0.2,
-        ge=0.0,
-        description="Maximum gap in seconds for merging adjacent segments of the same speaker.",
-    ),
-    diarization_min_segment_duration: float = Query(
-        0.3,
-        ge=0.0,
-        description="Minimum final speaker segment duration in seconds.",
-    ),
     result_format: ExportFormat = Query(
         "docx",
-        description="Формат экспортируемого файла результата.",
+        description=(
+            "Формат экспортируемого файла результата: docx, txt, md, pdf, "
+            "srt, vtt или ass."
+        ),
     ),
     export_timestamps: bool = Query(
         False,
@@ -658,47 +172,8 @@ async def submit_transcription_url(
         source_filename=None,
         model=model,
         language=language,
-        task=task,
-        log_progress=log_progress,
-        beam_size=beam_size,
-        best_of=best_of,
-        patience=patience,
-        length_penalty=length_penalty,
-        repetition_penalty=repetition_penalty,
-        no_repeat_ngram_size=no_repeat_ngram_size,
-        temperature=temperature,
-        compression_ratio_threshold=compression_ratio_threshold,
-        log_prob_threshold=log_prob_threshold,
-        no_speech_threshold=no_speech_threshold,
-        condition_on_previous_text=condition_on_previous_text,
-        prompt_reset_on_temperature=prompt_reset_on_temperature,
-        initial_prompt=initial_prompt,
-        prefix=prefix,
-        suppress_blank=suppress_blank,
-        suppress_tokens=suppress_tokens,
-        without_timestamps=without_timestamps,
-        max_initial_timestamp=max_initial_timestamp,
-        word_timestamps=word_timestamps,
-        prepend_punctuations=prepend_punctuations,
-        append_punctuations=append_punctuations,
-        multilingual=multilingual,
-        vad_filter=vad_filter,
-        vad_parameters=vad_parameters,
-        max_new_tokens=max_new_tokens,
-        chunk_length=chunk_length,
-        clip_timestamps=clip_timestamps,
-        hallucination_silence_threshold=hallucination_silence_threshold,
-        hotwords=hotwords,
-        language_detection_threshold=language_detection_threshold,
-        language_detection_segments=language_detection_segments,
         diarization=diarization,
         num_speakers=num_speakers,
-        diarization_num_threads=diarization_num_threads,
-        diarization_cluster_threshold=diarization_cluster_threshold,
-        diarization_min_duration_on=diarization_min_duration_on,
-        diarization_min_duration_off=diarization_min_duration_off,
-        diarization_merge_gap=diarization_merge_gap,
-        diarization_min_segment_duration=diarization_min_segment_duration,
         result_format=result_format,
         export_timestamps=export_timestamps,
         save_source=save_source,
