@@ -20,6 +20,10 @@ torchcodec==0.11.*
 pyannote.audio
 sherpa-onnx
 
+hydra-core
+omegaconf
+sentencepiece
+
 faster-whisper==1.2.1
 numpy==2.4.1
 
