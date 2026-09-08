@@ -11,6 +11,7 @@ from app.service.queue_tracker import mark_task_started
 from app.service.transcriber import transcriber_service
 from app.settings import settings
 from app.utils.export import ExportFormat
+from app.utils.exporters.common import build_paragraph_blocks
 from app.utils.logging import get_logger
 
 logger = get_logger("worker.init")
@@ -414,6 +415,17 @@ def process_transcription(
             finally:
                 stage_progress["diarization"] = 100.0
                 _emit_progress()
+
+        paragraph_blocks = build_paragraph_blocks(result)
+        result["text"] = "\n\n".join(
+            " ".join(
+                str(part.get("text", "")).strip()
+                for part in block.get("parts", [])
+                if part.get("text")
+            )
+            for block in paragraph_blocks
+            if block.get("parts")
+        )
 
         if save_result:
             result_file = transcriber_service.export_result(
