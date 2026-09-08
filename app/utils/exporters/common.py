@@ -1,3 +1,4 @@
+import random
 import re
 from typing import Any
 
@@ -340,8 +341,59 @@ def build_speaker_blocks(result: dict) -> list[dict[str, Any]]:
 def _split_parts_by_pause(
     parts: list[dict[str, Any]],
     pause_sec: float,
+    min_chars: int,
     max_chars: int,
 ) -> list[list[dict[str, Any]]]:
+    def _force_split(items: list[dict[str, Any]]) -> list[list[dict[str, Any]]]:
+        forced_paragraphs: list[list[dict[str, Any]]] = []
+        paragraph: list[dict[str, Any]] = []
+        paragraph_len = 0
+
+        for item in items:
+            item_text = str(item.get("text", "")).strip()
+            words = item_text.split()
+            if not words:
+                continue
+
+            start = item.get("start")
+            end = item.get("end")
+            start_value = float(start) if isinstance(start, (int, float)) else None
+            end_value = float(end) if isinstance(end, (int, float)) else start_value
+            total_length = max(len(item_text), 1)
+            offset = 0
+
+            for word in words:
+                word_length = len(word)
+                if paragraph and paragraph_len + 1 + word_length > current_max_chars:
+                    forced_paragraphs.append(paragraph)
+                    paragraph = []
+                    paragraph_len = 0
+
+                word_start = (
+                    start_value + (offset / total_length) * (end_value - start_value)
+                    if start_value is not None and end_value is not None
+                    else start
+                )
+                word_end = (
+                    start_value
+                    + ((offset + word_length) / total_length) * (end_value - start_value)
+                    if start_value is not None and end_value is not None
+                    else end
+                )
+                paragraph.append(
+                    {
+                        "start": word_start,
+                        "end": word_end,
+                        "text": word,
+                    }
+                )
+                paragraph_len += word_length + (1 if paragraph_len else 0)
+                offset += word_length + 1
+
+        if paragraph:
+            forced_paragraphs.append(paragraph)
+        return forced_paragraphs
+
     def _parts_len(items: list[dict[str, Any]]) -> int:
         length = 0
         for item in items:
@@ -358,6 +410,7 @@ def _split_parts_by_pause(
     current: list[dict[str, Any]] = []
     current_len = 0
     prev_end: float | None = None
+    current_max_chars = random.randint(min_chars, max_chars)
 
     for part in parts:
         if not isinstance(part, dict):
@@ -379,11 +432,14 @@ def _split_parts_by_pause(
             and (start - prev_end) > pause_sec
         )
         text_len = len(text)
-        should_split_by_len = bool(current) and (current_len + 1 + text_len) > max_chars
+        should_split_by_len = bool(current) and (
+            current_len + 1 + text_len > current_max_chars
+        )
         if should_split:
             paragraphs.append(current)
             current = []
             current_len = 0
+            current_max_chars = random.randint(min_chars, max_chars)
         elif should_split_by_len:
             prev_text = str(current[-1].get("text", "")).strip() if current else ""
 
@@ -391,6 +447,7 @@ def _split_parts_by_pause(
                 paragraphs.append(current)
                 current = []
                 current_len = 0
+                current_max_chars = random.randint(min_chars, max_chars)
             else:
                 split_idx = None
                 for idx in range(len(current) - 2, -1, -1):
@@ -404,6 +461,14 @@ def _split_parts_by_pause(
                     paragraphs.append(current[:split_idx])
                     current = current[split_idx:]
                     current_len = _parts_len(current)
+                    current_max_chars = random.randint(min_chars, max_chars)
+                else:
+                    forced_paragraphs = _force_split(current)
+                    if len(forced_paragraphs) > 1:
+                        paragraphs.extend(forced_paragraphs[:-1])
+                        current = forced_paragraphs[-1]
+                        current_len = _parts_len(current)
+                        current_max_chars = random.randint(min_chars, max_chars)
 
         normalized_part: dict[str, Any] = {
             "start": start_raw,
@@ -418,7 +483,10 @@ def _split_parts_by_pause(
         if end is not None:
             prev_end = end
 
-    if current:
+    if current and current_len > current_max_chars:
+        forced_paragraphs = _force_split(current)
+        paragraphs.extend(forced_paragraphs)
+    elif current:
         paragraphs.append(current)
     return paragraphs
 
@@ -426,6 +494,7 @@ def _split_parts_by_pause(
 def build_paragraph_blocks(
     result: dict,
     pause_sec: float = 2.0,
+    min_chars: int = 200,
     max_chars: int = 350,
 ) -> list[dict[str, Any]]:
     """
@@ -447,6 +516,7 @@ def build_paragraph_blocks(
             for paragraph_parts in _split_parts_by_pause(
                 parts,
                 pause_sec=pause_sec,
+                min_chars=min_chars,
                 max_chars=max_chars,
             ):
                 paragraph_blocks.append({"speaker": speaker, "parts": paragraph_parts})
@@ -459,6 +529,7 @@ def build_paragraph_blocks(
     for paragraph_parts in _split_parts_by_pause(
         all_parts,
         pause_sec=pause_sec,
+        min_chars=min_chars,
         max_chars=max_chars,
     ):
         paragraph_blocks.append({"speaker": None, "parts": paragraph_parts})
