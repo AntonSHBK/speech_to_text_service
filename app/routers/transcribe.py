@@ -7,7 +7,12 @@ from fastapi.responses import FileResponse
 
 from app.celery_app import celery_app
 from app.models.catalog import ModelTranscribeSize
-from app.service.queue_tracker import enqueue_task, get_queue_position
+from app.service.queue_tracker import (
+    enqueue_task,
+    get_queue_position,
+    remove_task,
+    request_task_cancellation,
+)
 from app.service.transcriber import transcriber_service
 from app.settings import settings
 from app.tasks.transcribe import process_transcription
@@ -229,6 +234,7 @@ def get_transcription_status(task_id: str):
         "PROGRESS": "processing",
         "STARTED": "processing",
         "RETRY": "retrying",
+        "REVOKED": "cancelled",
     }
     status = status_map.get(result.state, result.state.lower())
     queue_position = get_queue_position(task_id) if status == "queued" else None
@@ -245,6 +251,50 @@ def get_transcription_status(task_id: str):
         "progress_transcription": progress_transcription,
         "progress_diarization": progress_diarization,
         "media_duration_sec": media_duration_sec,
+    }
+
+
+@router.delete("/transcribe/tasks/{task_id}", status_code=202)
+def cancel_transcription_task(task_id: str):
+    """Запрашивает отмену ожидающей или выполняемой задачи транскрибации."""
+    result = celery_app.AsyncResult(task_id)
+    state_before_cancellation = result.state
+
+    if state_before_cancellation == "REVOKED":
+        return {
+            "task_id": task_id,
+            "status": "cancelled",
+            "state_before_cancellation": state_before_cancellation,
+            "is_running": False,
+            "detail": "Задача уже была отменена.",
+        }
+
+    if state_before_cancellation in {"SUCCESS", "FAILURE"}:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Задача уже завершена со статусом {state_before_cancellation}.",
+        )
+
+    if not request_task_cancellation(task_id):
+        raise HTTPException(
+            status_code=503,
+            detail="Не удалось зарегистрировать отмену задачи в Redis.",
+        )
+
+    celery_app.control.revoke(task_id)
+    remove_task(task_id)
+
+    is_running = state_before_cancellation in {"PROGRESS", "STARTED"}
+    return {
+        "task_id": task_id,
+        "status": "cancellation_requested",
+        "state_before_cancellation": state_before_cancellation,
+        "is_running": is_running,
+        "detail": (
+            "Задача будет остановлена при ближайшем обновлении прогресса."
+            if is_running
+            else "Задача отменена."
+        ),
     }
 
 

@@ -2,12 +2,13 @@ from pathlib import Path
 import torchaudio
 import subprocess
 
+from celery.exceptions import Ignore
 from celery.signals import worker_process_init
 
 from app.celery_app import celery_app
 from app.models.catalog import ModelTranscribeSize, resolve_model_name
 from app.service.source_downloader import download_source
-from app.service.queue_tracker import mark_task_started
+from app.service.queue_tracker import is_task_cancellation_requested, mark_task_started
 from app.service.transcriber import transcriber_service
 from app.settings import settings
 from app.utils.export import ExportFormat
@@ -173,7 +174,6 @@ def _select_model_by_duration(
         )
         return model
 
-    # Для файлов длиннее 2 часов используется medium, иначе остается модель из запроса.
     selected_model: ModelTranscribeSize = model
     if duration > 7200:
         selected_model = "medium"
@@ -239,6 +239,34 @@ def process_transcription(
         "diarization": 0.0 if diarization else None,
     }
 
+    def _raise_if_cancellation_requested() -> None:
+        if not is_task_cancellation_requested(self.request.id):
+            return
+
+        transcription_progress = float(stage_progress.get("transcription") or 0.0)
+        diarization_progress = float(stage_progress.get("diarization") or 0.0)
+        overall_progress = (
+            transcription_progress * TRANSCRIPTION_WEIGHT
+            + diarization_progress * DIARIZATION_WEIGHT
+            if diarization
+            else transcription_progress
+        )
+        logger.info("Задача отменена через API | task_id=%s", self.request.id)
+        self.update_state(
+            state="REVOKED",
+            meta={
+                "progress": round(overall_progress, 1),
+                "progress_overall": round(overall_progress, 1),
+                "progress_transcription": round(transcription_progress, 1),
+                "progress_diarization": (
+                    round(diarization_progress, 1) if diarization else None
+                ),
+                "media_duration_sec": media_duration_sec,
+                "cancelled": True,
+            },
+        )
+        raise Ignore()
+
     def _emit_progress() -> None:
         transcription_progress = float(stage_progress.get("transcription") or 0.0)
         diarization_progress_raw = stage_progress.get("diarization")
@@ -272,6 +300,8 @@ def process_transcription(
     retry_scheduled = False
 
     try:
+        _raise_if_cancellation_requested()
+
         if source_url:
             logger.info("Скачивание source_url начато: %s", source_url)
             input_path = download_source(source_url)
@@ -306,6 +336,7 @@ def process_transcription(
         )
 
         def _transcription_progress(progress: float):
+            _raise_if_cancellation_requested()
             stage_progress["transcription"] = max(0.0, min(100.0, float(progress)))
             _emit_progress()
 
@@ -364,6 +395,7 @@ def process_transcription(
             )
 
             def _diarization_progress(progress: float):
+                _raise_if_cancellation_requested()
                 stage_progress["diarization"] = max(0.0, min(100.0, float(progress)))
                 _emit_progress()
 
@@ -398,6 +430,8 @@ def process_transcription(
 
                 result["diarization"] = diarization_result
                 result["diarization_error"] = None
+            except Ignore:
+                raise
             except Exception as exc:
                 logger.exception(
                     "Определение спикеров завершилось с ошибкой | файл=%s",
@@ -409,6 +443,7 @@ def process_transcription(
                 stage_progress["diarization"] = 100.0
                 _emit_progress()
 
+        _raise_if_cancellation_requested()
         paragraph_blocks = build_paragraph_blocks(result)
         result["text"] = "\n\n".join(
             " ".join(
@@ -421,6 +456,7 @@ def process_transcription(
         )
 
         if save_result:
+            _raise_if_cancellation_requested()
             result_file = transcriber_service.export_result(
                 result=result,
                 source_filename=source_filename,
