@@ -25,8 +25,8 @@ GPU_MAX_RETRIES = 3
 # Параметры faster-whisper, общие для всех задач транскрибации.
 TRANSCRIPTION_TASK = "transcribe"
 TRANSCRIPTION_LOG_PROGRESS = False
-TRANSCRIPTION_BEAM_SIZE = 3
-TRANSCRIPTION_BEST_OF = 3
+TRANSCRIPTION_BEAM_SIZE = 4
+TRANSCRIPTION_BEST_OF = 4
 TRANSCRIPTION_PATIENCE = 1.0
 TRANSCRIPTION_LENGTH_PENALTY = 1.0
 TRANSCRIPTION_REPETITION_PENALTY = 1.0
@@ -35,12 +35,13 @@ TRANSCRIPTION_TEMPERATURE = [0.0, 0.2, 0.4, 0.6, 0.8, 1.0]
 TRANSCRIPTION_COMPRESSION_RATIO_THRESHOLD = 2.4
 TRANSCRIPTION_LOG_PROB_THRESHOLD = -1.0
 TRANSCRIPTION_NO_SPEECH_THRESHOLD = 0.6
-TRANSCRIPTION_CONDITION_ON_PREVIOUS_TEXT = False
+TRANSCRIPTION_CONDITION_ON_PREVIOUS_TEXT = True
 TRANSCRIPTION_PROMPT_RESET_ON_TEMPERATURE = 0.5
 TRANSCRIPTION_INITIAL_PROMPT = (
-    "Расставляй знаки препинания: точки, запятые, "
-    "вопросительные и восклицательные знаки. "
-    "Разделяй текст на законченные предложения."
+    "Use punctuation: periods, commas, "
+    "question marks, and exclamation marks. "
+    "Divide the text into complete sentences. "
+    "Keep sentences short."
 )
 TRANSCRIPTION_PREFIX = None
 TRANSCRIPTION_SUPPRESS_BLANK = True
