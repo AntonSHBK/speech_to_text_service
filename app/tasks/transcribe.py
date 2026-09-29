@@ -253,7 +253,7 @@ def process_transcription(
         )
         logger.info("Задача отменена через API | task_id=%s", self.request.id)
         self.update_state(
-            state="REVOKED",
+            state="CANCELLED",
             meta={
                 "progress": round(overall_progress, 1),
                 "progress_overall": round(overall_progress, 1),

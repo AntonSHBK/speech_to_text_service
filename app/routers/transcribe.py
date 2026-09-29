@@ -1,6 +1,7 @@
 from pathlib import Path
 from typing import Optional
 import mimetypes
+from uuid import uuid4
 
 from fastapi import APIRouter, File, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse
@@ -31,6 +32,26 @@ def _normalize_optional_language(language: str | None) -> str | None:
     return normalized
 
 
+def _store_cancelled_task_result(task_id: str) -> bool:
+    """Сохраняет итоговый статус отмены задачи в Celery backend."""
+    try:
+        celery_app.backend.store_result(
+            task_id,
+            {
+                "progress": 0.0,
+                "progress_overall": 0.0,
+                "progress_transcription": None,
+                "progress_diarization": None,
+                "media_duration_sec": None,
+                "cancelled": True,
+            },
+            state="CANCELLED",
+        )
+    except Exception:
+        return False
+    return True
+
+
 def _enqueue_transcription_task(
     audio_source: Path | None = None,
     source_filename: str | None = None,
@@ -46,26 +67,35 @@ def _enqueue_transcription_task(
 ) -> dict:
     audio_path = str(audio_source) if audio_source else None
     language = _normalize_optional_language(language)
-    queued_task = process_transcription.delay(
-        audio_path=audio_path,
-        source_filename=source_filename,
-        source_url=source_url,
-        model=model,
-        language=language,
-        diarization=diarization,
-        num_speakers=num_speakers,
-        result_format=result_format,
-        export_timestamps=export_timestamps,
-        save_source=save_source,
-        save_result=save_result,
-    )
-    queue_position = enqueue_task(queued_task.id)
+    task_id = str(uuid4())
+    queue_position = enqueue_task(task_id)
+
+    try:
+        process_transcription.apply_async(
+            kwargs={
+                "audio_path": audio_path,
+                "source_filename": source_filename,
+                "source_url": source_url,
+                "model": model,
+                "language": language,
+                "diarization": diarization,
+                "num_speakers": num_speakers,
+                "result_format": result_format,
+                "export_timestamps": export_timestamps,
+                "save_source": save_source,
+                "save_result": save_result,
+            },
+            task_id=task_id,
+        )
+    except Exception:
+        remove_task(task_id)
+        raise
 
     return {
-        "task_id": queued_task.id,
+        "task_id": task_id,
         "status": "queued",
         "queue_position": queue_position,
-        "status_url": f"/transcribe/tasks/{queued_task.id}",
+        "status_url": f"/transcribe/tasks/{task_id}",
     }
 
 
@@ -234,6 +264,7 @@ def get_transcription_status(task_id: str):
         "PROGRESS": "processing",
         "STARTED": "processing",
         "RETRY": "retrying",
+        "CANCELLED": "cancelled",
         "REVOKED": "cancelled",
     }
     status = status_map.get(result.state, result.state.lower())
@@ -260,7 +291,7 @@ def cancel_transcription_task(task_id: str):
     result = celery_app.AsyncResult(task_id)
     state_before_cancellation = result.state
 
-    if state_before_cancellation == "REVOKED":
+    if state_before_cancellation in {"CANCELLED", "REVOKED"}:
         return {
             "task_id": task_id,
             "status": "cancelled",
@@ -279,6 +310,12 @@ def cancel_transcription_task(task_id: str):
         raise HTTPException(
             status_code=503,
             detail="Не удалось зарегистрировать отмену задачи в Redis.",
+        )
+
+    if not _store_cancelled_task_result(task_id):
+        raise HTTPException(
+            status_code=503,
+            detail="Не удалось сохранить статус отмененной задачи в Celery backend.",
         )
 
     celery_app.control.revoke(task_id)

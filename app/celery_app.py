@@ -41,10 +41,10 @@ celery_app.conf.update(
     # чтобы трассировки Celery записывались в логи воркера.
     worker_hijack_root_logger=False,
     # Хранит результаты задач в хранилище в течение 24 часов.
-    result_expires=86400,
+    result_expires=1*24*60*60,
     # Время (в секундах), после которого неподтверждённая задача
     # снова становится доступной в брокере.
-    broker_transport_options={"visibility_timeout": 3600},
+    broker_transport_options={"visibility_timeout":4*60*60},
 )
 
 celery_app.conf.beat_schedule = {
